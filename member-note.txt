@@ -1,0 +1,5 @@
+-- 2024-11-06T20:03 --
+
+- Đặt tên lớp, giá trị enum viết dạng CamelCase (ví dụ: HocSinhNam), các biến constant viết hoa hết (ví dụ: PI_NUMBER), còn lại ở dạng snake_case (ví dụ: co_giao).
+- Khi viết cần đóng gói (tức hàm không dùng cần để private). Trong python, nếu private thì dùng 2 gạch trước tên hàm/biến (ví dụ: __my_method()), protected thì 1 gạch.
+- Các tham số truyền vào, kiểu trả về hay bất cứ biến nào cần ghi rõ kiểu dữ liệu (ví dụ: my_method(val: int)) --> giúp IDE hint chức năng trong lúc viết.
