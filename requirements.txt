@@ -1,0 +1,4 @@
+# This project requires Python 3.10 or higher, but less than 3.11
+
+# packages
+pillow==11.0.0

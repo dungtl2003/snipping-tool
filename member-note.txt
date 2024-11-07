@@ -3,3 +3,26 @@
 - Đặt tên lớp, giá trị enum viết dạng CamelCase (ví dụ: HocSinhNam), các biến constant viết hoa hết (ví dụ: PI_NUMBER), còn lại ở dạng snake_case (ví dụ: co_giao).
 - Khi viết cần đóng gói (tức hàm không dùng cần để private). Trong python, nếu private thì dùng 2 gạch trước tên hàm/biến (ví dụ: __my_method()), protected thì 1 gạch.
 - Các tham số truyền vào, kiểu trả về hay bất cứ biến nào cần ghi rõ kiểu dữ liệu (ví dụ: my_method(val: int)) --> giúp IDE hint chức năng trong lúc viết.
+
+-- 2024-11-07T17:26 --
+
+- Sử dụng python 3.10.x.
+- Viết commit cần theo convention (tham khảo link: https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13) (ví dụ: feat: add blur text).
+- Không được code nhánh main mà phải tạo nhánh. Tên nhánh đúng cú pháp sau: [username]/[feature] (ví dụ: dungtl2003/colorpicker). Muốn merge với main cần tạo PR (Pull Request).
+- Viết docs cho hàm/phương thức theo cú pháp sau:
+Ví dụ:
+def send_message(sender, recipient, message_body, priority=1) -> int:
+   """
+   Send a message to a recipient.
+
+   :param str sender: The person sending the message
+   :param str recipient: The recipient of the message
+   :param str message_body: The body of the message
+   :param priority: The priority of the message, can be a number 1-5
+   :type priority: integer or None
+   :return: the message id
+   :rtype: int
+   :raises ValueError: if the message_body exceeds 160 characters
+   :raises TypeError: if the message_body is not a basestring
+   """
+- Thư viện nào cài thêm cần ghi rõ trong `requirements.txt`, rõ ràng cả phiên bản gói thư viện (ví dụ: "six==1.16.0").
