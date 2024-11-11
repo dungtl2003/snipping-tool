@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Optional
 
+import time
 from PyQt6 import QtGui
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt
 from PyQt6.QtGui import QCursor, QPainter, QPixmap, QScreen
@@ -14,6 +15,7 @@ class Capture(QWidget):
 
         self.main = main_window
         self.main.hide()
+        time.sleep(0.1)  # wait for main screen to hide
 
         self.setMouseTracking(True)
 
@@ -26,9 +28,11 @@ class Capture(QWidget):
             | Qt.WindowType.X11BypassWindowManagerHint  # Fking multi-monitor
         )
 
+        self.__original_pixmap = self.__pixmap_combined_screen()
+
         # Set up a frameless, transparent window that covers all monitors and stays on top
         self.setGeometry(self.full_geometry)
-        self.setWindowOpacity(0.15)
+        self.setWindowOpacity(0.5)
         self.show()
 
         # Initialize individual rubber bands for each screen
@@ -60,8 +64,8 @@ class Capture(QWidget):
             # Start the rubber band selection from the clicked position
             self.origin = a0.globalPosition().toPoint()
             self.selection_rect = QRect(self.origin, QSize())
-            self.__update_rubber_bands()
             self.__show_rubber_bands()
+            self.__update_rubber_bands()
 
     def mouseMoveEvent(self, a0: Optional[QtGui.QMouseEvent]) -> None:
         assert a0 is not None
@@ -91,9 +95,9 @@ class Capture(QWidget):
             intersection = screen.geometry().intersected(self.selection_rect)
             if not intersection.isEmpty():
                 rubber_band.setGeometry(intersection)
-                rubber_band.show()
-            else:
-                rubber_band.hide()
+            #     rubber_band.show()
+            # else:
+            #     rubber_band.hide()
 
     def __show_rubber_bands(self) -> None:
         for rubber_band in self.rubber_bands.values():
@@ -104,6 +108,16 @@ class Capture(QWidget):
             rubber_band.hide()
 
     def __capture_combined_screen(self):
+        # Extract the selected region from the combined pixmap
+        global_rect = QRect(self.selection_rect.topLeft(), self.selection_rect.size())
+        selected_region = self.__original_pixmap.copy(
+            global_rect.translated(-self.full_geometry.topLeft())
+        )
+
+        # Show the selected region
+        self.main.label.setPixmap(selected_region)
+
+    def __pixmap_combined_screen(self) -> QPixmap:
         # Create a combined pixmap for all screens
         combined_pixmap = QPixmap(self.full_geometry.size())
         combined_pixmap.fill(Qt.GlobalColor.transparent)  # Fill with transparency
@@ -118,14 +132,7 @@ class Capture(QWidget):
             )
         painter.end()
 
-        # Extract the selected region from the combined pixmap
-        global_rect = QRect(self.selection_rect.topLeft(), self.selection_rect.size())
-        selected_region = combined_pixmap.copy(
-            global_rect.translated(-self.full_geometry.topLeft())
-        )
-
-        # Show the selected region
-        self.main.label.setPixmap(selected_region)
+        return combined_pixmap
 
     def __get_combined_screen_geometry(self) -> QRect:
         # Calculate the union of all screens' geometries
