@@ -33,14 +33,6 @@ def translate(input_text: str, target_language: str) -> str:
         'Ukrainian': 'uk', 'Urdu': 'ur', 'Uzbek': 'uz', 'Welsh': 'cy',
         'Yiddish': 'yi', 'Yoruba': 'yo', 'Zulu': 'zu'
     }
-
-    # Check if input_text is a valid string
-    if not isinstance(input_text, str):
-        raise TypeError("The input_text must be a string.")
-
-    # Check if target_language is a valid string
-    if not isinstance(target_language, str):
-        raise TypeError("The target_language must be a string.")
     
     # Check if target_language is supported
     if target_language not in language_map:
