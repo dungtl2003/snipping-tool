@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QApplication,
 )
 
-from components.snipper_window import SnipperWindow
+from components import SnipperWindow
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import time
 from PyQt6 import QtGui
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt
 from PyQt6.QtGui import QCursor, QPainter, QPixmap, QScreen
-from PyQt6.QtWidgets import QApplication, QRubberBand, QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QRubberBand, QWidget
 from PyQt6.sip import voidptr
 
 
@@ -15,7 +15,7 @@ class Capture(QWidget):
 
         self.main = main_window
         self.main.hide()
-        time.sleep(0.1)  # wait for main screen to hide
+        time.sleep(0.2)  # wait for main screen to hide
 
         self.setMouseTracking(True)
 
@@ -28,11 +28,23 @@ class Capture(QWidget):
             | Qt.WindowType.X11BypassWindowManagerHint  # Fking multi-monitor
         )
 
-        self.__original_pixmap = self.__pixmap_combined_screen()
+        self.__background_pixmap = self.__capture_all_screens()
 
         # Set up a frameless, transparent window that covers all monitors and stays on top
         self.setGeometry(self.full_geometry)
-        self.setWindowOpacity(0.5)
+
+        # Display the combined screenshot as the background
+        self.background_label = QLabel(self)
+        self.background_label.setPixmap(self.__background_pixmap)
+        self.background_label.setGeometry(self.rect())
+
+        # Create the semi-transparent overlay widget
+        self.overlay = QWidget(self)
+        self.overlay.setGeometry(self.rect())
+        self.overlay.setStyleSheet(
+            "background-color: rgba(0, 0, 0, 50);"
+        )  # Black with 150/255 opacity
+
         self.show()
 
         # Initialize individual rubber bands for each screen
@@ -83,7 +95,7 @@ class Capture(QWidget):
             # Hide rubber bands to take a screenshot without them
             self.__hide_rubber_bands()
 
-            self.__capture_combined_screen()
+            self.__capture_region()
 
             QApplication.restoreOverrideCursor()
             self.main.show()
@@ -107,17 +119,17 @@ class Capture(QWidget):
         for rubber_band in self.rubber_bands.values():
             rubber_band.hide()
 
-    def __capture_combined_screen(self):
+    def __capture_region(self):
         # Extract the selected region from the combined pixmap
         global_rect = QRect(self.selection_rect.topLeft(), self.selection_rect.size())
-        selected_region = self.__original_pixmap.copy(
+        selected_region = self.__background_pixmap.copy(
             global_rect.translated(-self.full_geometry.topLeft())
         )
 
         # Show the selected region
         self.main.label.setPixmap(selected_region)
 
-    def __pixmap_combined_screen(self) -> QPixmap:
+    def __capture_all_screens(self) -> QPixmap:
         # Create a combined pixmap for all screens
         combined_pixmap = QPixmap(self.full_geometry.size())
         combined_pixmap.fill(Qt.GlobalColor.transparent)  # Fill with transparency
