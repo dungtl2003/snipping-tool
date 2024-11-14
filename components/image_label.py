@@ -1,6 +1,6 @@
 from re import error
 from typing import Optional, Tuple
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtGui import (
     QImage,
     QMouseEvent,
@@ -32,12 +32,12 @@ class ImageLabel(QLabel):
             None if self.__original_pixmap is None else self.__original_pixmap.toImage()
         )
 
-    def is_in_bound(self, point: QPointF) -> bool:
+    def is_in_bound(self, glob_point: QPointF) -> bool:
         """
         Check if the point is within the image bounds.
 
-        :param point: the point to check
-        :type point: QPointF
+        :param glob_point: the global position
+        :type glob_point: QPointF
         :return: True if the point is within the image bounds, False otherwise
         :rtype: bool
         """
@@ -45,7 +45,9 @@ class ImageLabel(QLabel):
             return False
 
         # Get click position relative to the scaled image
-        (pixmap_x, pixmap_y) = self.__get_pixmap_coords_from_global_unchecked(point)
+        (pixmap_x, pixmap_y) = self.__get_pixmap_coords_from_global_unchecked(
+            glob_point
+        )
 
         # Check if click is within the scaled image bounds
         if not self.__is_in_bound(
@@ -57,7 +59,7 @@ class ImageLabel(QLabel):
         return True
 
     def get_original_pixmap_coords_from_global(
-        self, point: QPointF
+        self, point: QPointF | QPoint
     ) -> Tuple[float, float] | None:
         """
         Get the original pixmap coordinates from the global position.
@@ -121,7 +123,7 @@ class ImageLabel(QLabel):
         print(f"Clicked at ({x}, {y}) in image")
 
     def __get_pixmap_coords_from_global_unchecked(
-        self, point: QPointF
+        self, point: QPointF | QPoint
     ) -> Tuple[float, float]:
         label_pos = self.mapFromGlobal(point)
 
