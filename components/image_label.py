@@ -141,29 +141,19 @@ class ImageLabel(QLabel):
         if self.__original_pixmap is None:
             return
 
-        # Get the current label width
-        label_width = self.width()
+        scaled_pixmap = self.__original_pixmap.scaled(
+            self.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
 
-        # Scale the image if the window width is smaller than the image width
-        if label_width < self.__original_pixmap.width():
-            self.scale_factor = label_width / self.__original_pixmap.width()
+        self.scale_factor = scaled_pixmap.width() / self.__original_pixmap.width()
 
-            scaled_pixmap = self.__original_pixmap.scaledToWidth(
-                label_width, Qt.TransformationMode.SmoothTransformation
-            )
-
-            scaled_pixmap = scaled_pixmap.scaled(
-                scaled_pixmap.size() * self.__zoom_factor,
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )  # Apply zoom factor
-        else:
-            scaled_pixmap = self.__original_pixmap.scaled(
-                self.__original_pixmap.size() * self.__zoom_factor,
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self.scale_factor = 1.0
+        scaled_pixmap = scaled_pixmap.scaled(
+            scaled_pixmap.size() * self.__zoom_factor,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
 
         # Set the scaled or original pixmap to the QLabel
         super().setPixmap(scaled_pixmap)
