@@ -4,7 +4,8 @@ from PyQt6.QtWidgets import (
     QApplication,
 )
 
-from components import SnipperWindow
+from components import SnipperWindow, MouseObserver
+from utils.styles import styles
 
 
 if __name__ == "__main__":
@@ -14,25 +15,17 @@ if __name__ == "__main__":
         )
 
     app = QApplication(sys.argv)
-    app.setStyleSheet(
-        """
-    QFrame {
-        background-color: #3f3f3f;
-    }
-    QPushButton {
-        border-radius: 5px;
-        background-color: rgb(60, 90, 255);
-        padding: 10px;
-        color: white;
-        font-weight: bold;
-        font-family: Arial;
-        font-size: 12px;
-    }
-    QPushButton::hover {
-        background-color: rgb(60, 20, 255)
-    }
-    """
-    )
-    window = SnipperWindow()
-    window.show()
+    app.setStyleSheet(styles)
+    w = SnipperWindow()
+    w.show()
+
+    window = w.window()
+    assert window is not None
+
+    window_handle = window.windowHandle()
+    assert window_handle is not None
+
+    mouse_observer = MouseObserver(window_handle)
+    mouse_observer.subcribe(w.subscribers())
+
     sys.exit(app.exec())

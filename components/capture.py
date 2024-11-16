@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Optional
+from typing import Dict, Optional, cast
 
 import time
 from PyQt6 import QtGui
@@ -17,7 +17,7 @@ class Capture(QWidget):
         self.main.hide()
         time.sleep(0.2)  # wait for main screen to hide
 
-        self.setMouseTracking(True)
+        # self.setMouseTracking(True)
 
         # Calculate the geometry that covers all screens
         self.full_geometry = self.__get_combined_screen_geometry()
@@ -138,7 +138,7 @@ class Capture(QWidget):
         painter = QPainter(combined_pixmap)
         for screen in QApplication.screens():
             screen_geometry = screen.geometry()
-            pixmap = screen.grabWindow(voidptr(0))
+            pixmap = screen.grabWindow(cast(voidptr, 0))
             painter.drawPixmap(
                 screen_geometry.topLeft() - self.full_geometry.topLeft(), pixmap
             )
