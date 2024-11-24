@@ -17,7 +17,7 @@ class ImageLabel(QLabel):
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.__zoom_factor = 1.0  # 100%
-        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMouseTracking(True)
         self.__original_pixmap = None
 

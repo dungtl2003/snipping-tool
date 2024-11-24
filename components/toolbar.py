@@ -1,236 +1,250 @@
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QToolBar, QMenu, QVBoxLayout, QWidget
-)
-from PyQt6.QtGui import QIcon, QAction
-from PyQt6.QtCore import Qt, QSize
-import sys
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QToolBar, QWidget
+
+from utils.styles import qtoolbar_style
+
+import os
+from definitions import ICON_DIR
+
+MORE_ICON = os.path.join(ICON_DIR, "more.svg")
 
 
-class SnippingTool(QMainWindow):
-    """
-    Main Snipping Tool Application Window
-    """
-    def __init__(self):
+class BaseToolBar(QToolBar):
+    def __init__(self) -> None:
         super().__init__()
-        self.__init_ui()
 
-    def __init_ui(self) -> None:
+        self.setMovable(False)
+        self.setStyleSheet(qtoolbar_style)
+
+
+class MiddleToolBar(BaseToolBar):
+    def __init__(
+        self,
+        eye_dropper: "ColorPicker",
+    ) -> None:
+        super().__init__()
+
+        self.setStyleSheet("QToolBar { padding: 0px; }")
+
+        left_spacer = QWidget()
+        left_spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
+        right_spacer = QWidget()
+        right_spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(left_spacer)
+        layout.addWidget(eye_dropper)
+        layout.addWidget(right_spacer)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.addWidget(widget)
+
+
+class TopToolBar(BaseToolBar):
+    # new     | mode |       eye dropper
+    def __init__(
+        self,
+        new_capture: "NewCapture",
+        mode_switching: "ModeSwitching",
+        middle_toolbar: MiddleToolBar,
+        save: "SaveButton",
+        copy: "CopyButton",
+    ) -> None:
+        super().__init__()
+
+        self.__new_capture = new_capture
+        self.__mode_switching = mode_switching
+        self.__middle_toolbar = middle_toolbar
+        self.__save = save
+        self.__copy = copy
+
+        self.__spacer = QWidget()
+        self.__spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
+        self.__add_left_section()
+        self.__add_center_section()
+        self.__add_right_section()
+
+        self.hide_center_section()
+        self.hide_right_section()
+
+    def __add_center_section(self):
+        self.__middle_layout = QHBoxLayout()
+        self.__middle_layout.setContentsMargins(0, 0, 0, 0)
+        self.__middle_layout.addWidget(self.__middle_toolbar)
+
+        middle_widget = QWidget()
+        middle_widget.setLayout(self.__middle_layout)
+        self.addWidget(middle_widget)
+
+    def show_center_section(self) -> None:
         """
-        Initialize the main window and toolbar.
+        Show the center section.
+        :return: None
         """
-        self.setWindowTitle("Snipping Tool")
-        self.setWindowIcon(QIcon("../assets/icons/logo.jpg"))
-        # self.setMinimumSize(600, 200)
-        self.setGeometry(200, 200, 540, 200)  # Width x Height
-        self.__create_toolbar()
+        self.__middle_layout.removeWidget(self.__spacer)
+        self.__middle_layout.addWidget(self.__middle_toolbar)
 
-        #set background to dark mode
-        self.setStyleSheet("background-color: #2e2e2e; color: #ffffff;")
-
-    def __create_toolbar(self) -> None:
+    def hide_center_section(self) -> None:
         """
-        Create the toolbar with all required buttons and layouts.
+        Hide the center section.
+        :return: None
         """
-        toolbar = QToolBar("Main Toolbar", self)
-        toolbar.setIconSize(QSize(24, 24))
-        toolbar.setMovable(False)
-         # Style toolbar buttons
-        toolbar.setStyleSheet("""
-            QToolBar {
-                spacing: 10px;  /* Add spacing between buttons */
-            }
-            QToolButton {
-                width: 60px;  /* Set button width */
-                margin: 1px;  /* Add margin around buttons */
-            }
-            QToolButton: hover {
-                background-color: #b8b7b4;
-                border: 1px solid #7e7e7e
-            }
-            QToolButton: pressed {
-                background-color: #b8b7b4;
-            
-            }
-        """)
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
-        self.addToolBar(toolbar)
-        # New Button
-        new_action = QAction("+ New", self)
-        #new_action.setIcon(QIcon("icons/scissors_1.png"))  # Replace with your icon path
-        new_action.triggered.connect(self.__new_snip)
-        toolbar.addAction(new_action)
-        
-        #add Separator
-        toolbar.addSeparator()
+        self.__middle_layout.removeWidget(self.__middle_toolbar)
+        self.__middle_layout.addWidget(self.__spacer)
 
-        # Snip Button
-        snip_action = QAction(QIcon("../assets/icons/camera_2.svg"), "Snip", self)
-        snip_action.setStatusTip("Capture a screenshot")
-        snip_action.triggered.connect(self.__snip_screen)
-        toolbar.addAction(snip_action)
-
-        #add Separator
-        toolbar.addSeparator()
-
-        # Record Button
-        record_action = QAction(QIcon("../assets/icons/camera-video.svg"), "Record", self)
-        record_action.setStatusTip("Record the screen")
-        record_action.triggered.connect(self.__record_screen)
-        toolbar.addAction(record_action)
-
-        #add Separator
-        toolbar.addSeparator()
-
-        # Mode Dropdown Button
-        mode_menu = QMenu("Mode", self)
-        rectangle_action = QAction(QIcon("../assets/icons/rectangle.svg"), "Rectangle", self)
-        rectangle_action.triggered.connect(self.__rectangle_mode)
-
-        window_action = QAction(QIcon("../assets/icons/rectangle.png"), "Window", self)
-        window_action.triggered.connect(self.__window_mode)
-
-        fullscreen_action = QAction(QIcon("../assets/icons/rectangle.png"), "Full Screen", self)
-        fullscreen_action.triggered.connect(self.__fullscreen_mode)
-
-        freeform_action = QAction(QIcon("../assets/icons/rectangle.png"), "Freeform", self)
-        freeform_action.triggered.connect(self.__freeform_mode)
-
-        mode_menu.addAction(rectangle_action)
-        mode_menu.addAction(window_action)
-        mode_menu.addAction(fullscreen_action)
-        mode_menu.addAction(freeform_action)
-
-
-        mode_action = QAction(QIcon("../assets/icons/rectangle.svg"), "Mode", self)
-        mode_action.setMenu(mode_menu)
-        toolbar.addAction(mode_action)
-
-        #add Separator
-        toolbar.addSeparator()
-
-        # Clock Dropdown Button
-        clock_menu = QMenu("Clock", self)
-        nodelay_action = QAction(QIcon("../assets/icons/clock.svg"), "No delay", self)
-        nodelay_action.triggered.connect(self.__nodelay_mode)
-
-        delay3_action = QAction(QIcon("../assets/icons/clock.svg"), "3s delay", self)
-        delay3_action.triggered.connect(self.__delay3s_mode)
-
-        delay5_action = QAction(QIcon("../assets/icons/clock.svg"), "5s delay", self)
-        delay5_action.triggered.connect(self.__delay5s_mode)
-
-        delay10_action = QAction(QIcon("../assets/icons/clock.svg"), "10s delay", self)
-        delay10_action.triggered.connect(self.__delay10s_mode)
-
-        clock_menu.addAction(nodelay_action)
-        clock_menu.addAction(delay3_action)
-        clock_menu.addAction(delay5_action)
-        clock_menu.addAction(delay10_action)
-
-
-        clock_action = QAction(QIcon("../assets/icons/clock.svg"), "Clock", self)
-        clock_action.setMenu(clock_menu)
-        toolbar.addAction(clock_action)
-
-        #add Separator
-        toolbar.addSeparator()
-
-        # More Dropdown Button
-        more_menu = QMenu("More", self)
-        # save_action = QAction(QIcon("icons/clock.svg"), "No delay", self)
-        # save_action.triggered.connect(self.__nodelay_mode)
-
-        # clound_action = QAction(QIcon("icons/clock.svg"), "3s delay", self)
-        # clound_action.triggered.connect(self.__delay3s_mode)
-
-        # clock_menu.addAction(nodelay_action)
-        # clock_menu.addAction(delay3_action)
-        # clock_menu.addAction(delay5_action)
-        # clock_menu.addAction(delay10_action)
-
-
-        more_action = QAction(QIcon("icons/open-menu.svg"), "More", self)
-        more_action.setMenu(more_menu)
-        toolbar.addAction(more_action)
-
-    def __new_snip(self) -> None:
+    def show_right_section(self) -> None:
         """
-        Action for 'New' button.
+        Show the right section.
+        :return: None
         """
-        print("New snip triggered")
+        self.__right_toolbar.show()
 
-    def __snip_screen(self) -> None:
+    def hide_right_section(self) -> None:
         """
-        Action for 'Snip' button.
+        Hide the right section.
+        :return: None
         """
-        print("Snip screen triggered")
+        self.__right_toolbar.hide()
 
-    def __record_screen(self) -> None:
+    def show_left_section(self) -> None:
         """
-        Action for 'Record' button.
+        Show the left section.
+        :return: None
         """
-        print("Record screen triggered")
+        self.__left_toolbar.show()
 
-    def __rectangle_mode(self) -> None:
+    def hide_left_section(self) -> None:
         """
-        Action for 'Rectangle Mode' button.
+        Hide the left section.
+        :return: None
         """
-        print("Rectangle mode triggered")
+        self.__left_toolbar.hide()
 
-    def __window_mode(self) -> None:
-        """
-        Action for 'Window Mode' button.
-        """
-        print("Window mode triggered")
-    
-    def __fullscreen_mode(self) -> None:
-        """
-        Action for 'Fullscreen Mode' button.
-        """
-        print("Fullscreen mode triggered")
-    
-    def __freeform_mode(self) -> None:
-        """
-        Action for 'Freeform Mode' button.
-        """
-        print("Freeform mode triggered")
-    
-    def __nodelay_mode(self) -> None:
-        """
-        Action for 'No Delay' button.
-        """
-        print("No delay mode triggered")
-    
-    def __delay3s_mode(self) -> None:
-        """
-        Action for '3s Delay' button.
-        """
-        print("3s delay mode triggered")
-    
-    def __delay5s_mode(self) -> None:
-        """
-        Action for '5s Delay' button.
-        """
-        print("5s delay mode triggered")
+    # save copy | more
+    def __add_right_section(self):
+        self.__right_toolbar = QToolBar()
+        self.__right_toolbar.setMovable(False)
+        self.__right_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
 
-    def __delay10s_mode(self) -> None:
+        # Save
+        self.__right_toolbar.addWidget(self.__save)
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(3, 3)
+        self.__right_toolbar.addWidget(space)
+
+        # Copy
+        self.__right_toolbar.addWidget(self.__copy)
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(10, 10)
+        self.__right_toolbar.addWidget(space)
+
+        # |
+        self.__right_toolbar.addSeparator()
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(10, 10)
+        self.__right_toolbar.addWidget(space)
+
+        # More
+        more_button = QPushButton(QIcon(MORE_ICON), "")
+        self.__right_toolbar.addWidget(more_button)
+
+        right_layout = QHBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(self.__right_toolbar)
+
+        right_widget = QWidget()
+        right_widget.setLayout(right_layout)
+
+        self.addWidget(right_widget)
+
+    # new  |  mode
+    def __add_left_section(self):
+        self.__left_toolbar = QToolBar()
+        self.__left_toolbar.setMovable(False)
+        self.__left_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
+
+        # New
+        self.__left_toolbar.addWidget(self.__new_capture)
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(10, 10)
+        self.__left_toolbar.addWidget(space)
+
+        # |
+        self.__left_toolbar.addSeparator()
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(10, 10)
+        self.__left_toolbar.addWidget(space)
+
+        # Mode
+        self.__left_toolbar.addWidget(self.__mode_switching)
+
+        left_layout = QHBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.addWidget(self.__left_toolbar)
+
+        left_widget = QWidget()
+        left_widget.setLayout(left_layout)
+        self.addWidget(left_widget)
+
+
+class BottomToolBar(BaseToolBar):
+    # eye dropper
+    def __init__(
+        self,
+        middle_toolbar: MiddleToolBar,
+    ) -> None:
+        super().__init__()
+
+        self.__middle_toolbar = middle_toolbar
+        self.__layout = QHBoxLayout()
+        self.__layout.setContentsMargins(0, 0, 0, 0)
+        self.__layout.addWidget(self.__middle_toolbar)
+
+        widget = QWidget()
+        widget.setLayout(self.__layout)
+        self.addWidget(widget)
+
+        self.hide()
+
+    def show(self) -> None:
         """
-        Action for '10s Delay' button.
+        Show the middle section.
+        :return: None
         """
-        print("10s delay mode triggered")
-    
-    
+        self.__layout.addWidget(self.__middle_toolbar)
+        return super().show()
+
+    def hide(self) -> None:
+        """
+        Hide the middle section.
+        :return: None
+        """
+        self.__layout.removeWidget(self.__middle_toolbar)
+        return super().hide()
 
 
-def main() -> None:
-    """
-    Main function to run the Snipping Tool application.
-    """
-    app = QApplication(sys.argv)
-    window = SnippingTool()
-    window.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
+from components.mode_switching import ModeSwitching
+from components.capture import NewCapture
+from components.color_picker import ColorPicker
+from components.save import SaveButton
+from components.copy import CopyButton

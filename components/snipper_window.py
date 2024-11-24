@@ -1,47 +1,38 @@
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QPixmap, QResizeEvent
 from PyQt6.QtWidgets import (
-    QFileDialog,
     QMainWindow,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
+from components.copy import CopyButton
+from components.save import SaveButton
+from definitions import ICON_DIR
+import os
+
 from components.mouse_observer import MouseObserver
+
+APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 
 
 class SnipperWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
-        self.m_width = 400
-        self.m_height = 500
-
-        self.setWindowTitle("Snipper")
-        self.setMinimumSize(self.m_width, self.m_height)
-
-        layout = QVBoxLayout()
+        self.setWindowTitle("Becap")
+        # Not working
+        icon = QIcon()
+        icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
+        self.setWindowIcon(icon)
 
         self.label = ImageLabel()
-        self.label.setVisible(True)
 
-        self.color_picker = ColorPicker(self)
-        self.btn_pick_color = QPushButton("Pick Color")
-        self.btn_pick_color.clicked.connect(self.toggle_color_picker)
+        self.setFixedSize(450, 100)
+        self.is_expand_before = False
 
-        self.btn_capture = QPushButton("Capture")
-        self.btn_capture.clicked.connect(self.capture)
-
-        self.btn_save = QPushButton("Save")
-        self.btn_save.clicked.connect(self.save)
-        self.btn_save.setVisible(False)
-
-        layout.addWidget(self.btn_capture)
-        layout.addWidget(self.btn_pick_color)
-        layout.addWidget(self.label)
-        layout.addWidget(self.btn_save)
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
+        self.__init_functions()
+        self.__set_layout()
 
     def subscribers(
         self,
@@ -52,40 +43,92 @@ class SnipperWindow(QMainWindow):
         :rtype: List[Tuple[Callable[..., None], MouseObserver.SubscribeEvent]]
         """
         return [
-            (self.color_picker.pick_color, MouseObserver.SubscribeEvent.PRESSED),
+            (self.__color_picker.pick_color, MouseObserver.SubscribeEvent.PRESSED),
             (
-                self.color_picker.handle_mouse_movement,
+                self.__color_picker.handle_mouse_movement,
                 MouseObserver.SubscribeEvent.MOVED,
             ),
         ]
 
-    def toggle_color_picker(self) -> None:
+    def show_with_expand(self) -> None:
+        if not self.is_expand_before:
+            self.is_expand_before = True
+
+            self.__toolbar_top.show_center_section()
+            self.__toolbar_top.show_right_section()
+            self.__toolbar_bottom.show()
+
+            self.setMinimumSize(450, 500)
+            self.setMaximumSize(16777215, 16777215)
+            self.resize(450, 500)
+
+        self.show()
+
+    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
+        if not self.is_expand_before:
+            return
+
+        # Toggle middle section visibility based on window width
+        # must hide first to remove widget from layout
+        if self.width() < 600:  # change this number to your desired width
+            self.__toolbar_top.hide_center_section()
+            self.__toolbar_bottom.show()
+        else:
+            self.__toolbar_bottom.hide()
+            self.__toolbar_top.show_center_section()
+
+    def __set_layout(self) -> None:
         """
-        Toggle the color picker.
+        Set the layout.
         :return: None
         """
-        self.color_picker.toggle()
+        # Main central widget
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
 
-    def capture(self) -> None:
-        """
-        Capture the screen.
-        Note that when capturing, no other actions can be performed.
-        :return: None
-        """
-        self.capturer = Capture(self)
-        self.btn_save.setVisible(True)
+        # Main layout
+        self.main_layout = QVBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-    def save(self) -> None:
-        file_name, _ = QFileDialog.getSaveFileName(
-            self, "Save Image", "", "Image files (*.png *.jpg *.bmp)"
+        self.__middle_toolbar = MiddleToolBar(self.__color_picker)
+
+        # Toolbar (at the top)
+        self.__toolbar_top = TopToolBar(
+            self.__new_capture,
+            self.__mode_switching,
+            self.__middle_toolbar,
+            self.__save,
+            self.__copy,
+        )
+        # Main section
+        self.label.setVisible(True)
+        # Toolbar (at the bottom)
+        self.__toolbar_bottom = BottomToolBar(self.__middle_toolbar)
+
+        self.main_layout.addWidget(
+            self.__toolbar_top, alignment=Qt.AlignmentFlag.AlignTop
+        )
+        self.main_layout.addWidget(self.label)
+        self.main_layout.addWidget(
+            self.__toolbar_bottom, alignment=Qt.AlignmentFlag.AlignBottom
         )
 
-        if file_name:
-            image = self.label.get_image()
-            assert image is not None
-            image.save(file_name)
+        # Window configuration
+
+    def __init_functions(self) -> None:
+        """
+        Init the functions.
+        :return: None
+        """
+        self.__new_capture = NewCapture(self)
+        self.__mode_switching = ModeSwitching()
+        self.__color_picker = ColorPicker(self)
+        self.__save = SaveButton()
+        self.__copy = CopyButton()
 
 
 from components.color_picker import ColorPicker
-from components.capture import Capture
+from components.capture import NewCapture
 from components.image_label import ImageLabel
+from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
+from components.mode_switching import ModeSwitching
