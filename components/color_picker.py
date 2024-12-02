@@ -1,17 +1,23 @@
-from PyQt6.QtGui import QColor, QMouseEvent
+from PyQt6.QtGui import QColor, QIcon, QMouseEvent
 from PyQt6.QtCore import QPoint, QPointF, Qt
-from PyQt6.QtWidgets import QApplication, QLabel, QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QPushButton
+
+import os
+from definitions import ICON_DIR
+
+EYE_DROPPER_ICON = os.path.join(ICON_DIR, "eyedropper.svg")
 
 
-class ColorPicker(QWidget):
+class ColorPicker(QPushButton):
     def __init__(self, main_window: "SnipperWindow") -> None:
-        super().__init__()
+        super().__init__(QIcon(EYE_DROPPER_ICON), "")
 
         self.__main = main_window
         self.__is_active = False
         self.__is_last_in_bound: bool | None = None
 
         self.setMouseTracking(True)
+        self.setCheckable(True)
 
         # Create a color preview square label
         self.color_square = QLabel(self.__main.label)
@@ -20,15 +26,7 @@ class ColorPicker(QWidget):
             "background-color: #FFFFFF; border: 1px solid black;"
         )
         self.color_square.hide()  # Hide initially
-
-    def deactivate(self) -> None:
-        """
-        Deactivate the color picker.
-        :return: None
-        """
-        self.__is_active = False
-        self.__is_last_in_bound = None
-        self.color_square.hide()
+        self.clicked.connect(self.toggle)
 
     def toggle(self) -> None:
         """
@@ -36,6 +34,7 @@ class ColorPicker(QWidget):
         :return: None
         """
         self.__is_active = not self.__is_active
+        self.setChecked(self.__is_active)
 
     def pick_color(self, a0: QMouseEvent) -> None:
         """

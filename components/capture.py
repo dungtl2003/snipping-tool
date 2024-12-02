@@ -4,12 +4,33 @@ from typing import Dict, Optional, cast
 import time
 from PyQt6 import QtGui
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt
-from PyQt6.QtGui import QCursor, QPainter, QPixmap, QScreen
-from PyQt6.QtWidgets import QApplication, QLabel, QRubberBand, QWidget
+from PyQt6.QtGui import QCursor, QIcon, QPainter, QPixmap, QScreen
+from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QRubberBand, QWidget
 from PyQt6.sip import voidptr
 
+import os
+from definitions import ICON_DIR
 
-class Capture(QWidget):
+PLUS_ICON = os.path.join(ICON_DIR, "plus.svg")
+
+
+class NewCapture(QPushButton):
+    def __init__(self, main_window: "SnipperWindow") -> None:
+        super().__init__(QIcon(PLUS_ICON), " New")
+
+        self.__main = main_window
+        self.clicked.connect(self.__capture)
+
+    def __capture(self) -> None:
+        """
+        Capture the screen.
+        Note that when capturing, no other actions can be performed.
+        :return: None
+        """
+        self.capturer = Capturer(self.__main)
+
+
+class Capturer(QWidget):
     def __init__(self, main_window: "SnipperWindow") -> None:
         super().__init__()
 
@@ -98,7 +119,7 @@ class Capture(QWidget):
             self.__capture_region()
 
             QApplication.restoreOverrideCursor()
-            self.main.show()
+            self.main.show_with_expand()
             self.close()
 
     def __update_rubber_bands(self) -> None:
@@ -107,9 +128,6 @@ class Capture(QWidget):
             intersection = screen.geometry().intersected(self.selection_rect)
             if not intersection.isEmpty():
                 rubber_band.setGeometry(intersection)
-            #     rubber_band.show()
-            # else:
-            #     rubber_band.hide()
 
     def __show_rubber_bands(self) -> None:
         for rubber_band in self.rubber_bands.values():

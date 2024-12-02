@@ -1,11 +1,15 @@
-import sys
+import sys, os
 
+from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
 )
 
 from components import SnipperWindow, MouseObserver
 from utils.styles import styles
+from definitions import ICON_DIR
+
+APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 
 
 if __name__ == "__main__":
@@ -15,6 +19,7 @@ if __name__ == "__main__":
         )
 
     app = QApplication(sys.argv)
+    icon = QIcon(APP_ICON)
     app.setStyleSheet(styles)
     w = SnipperWindow()
     w.show()
