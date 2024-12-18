@@ -6,6 +6,7 @@ from components.mouse_observer import MouseObserver
 from components.toolbar import TopToolBar, BottomToolBar, MiddleToolBar
 from components.save import SaveButton
 from components.copy import CopyButton
+from components.image_viewer import ImageViewer
 
 __all__ = [
     "ImageLabel",
@@ -18,4 +19,5 @@ __all__ = [
     "SaveButton",
     "CopyButton",
     "MiddleToolBar",
+    "ImageViewer",
 ]

@@ -3,10 +3,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPixmap, QResizeEvent
 from PyQt6.QtWidgets import (
     QMainWindow,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 from components.copy import CopyButton
+from components.image_viewer import ImageViewer
 from components.save import SaveButton
 from definitions import ICON_DIR
 import os
@@ -26,7 +28,8 @@ class SnipperWindow(QMainWindow):
         icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
         self.setWindowIcon(icon)
 
-        self.label = ImageLabel()
+        self.label = ImageViewer()
+        # self.label = ImageLabel()
 
         self.setFixedSize(450, 100)
         self.is_expand_before = False
@@ -105,6 +108,7 @@ class SnipperWindow(QMainWindow):
         # Toolbar (at the bottom)
         self.__toolbar_bottom = BottomToolBar(self.__middle_toolbar)
 
+        # Create a QScrollArea and set the QLabel as its widget
         self.main_layout.addWidget(
             self.__toolbar_top, alignment=Qt.AlignmentFlag.AlignTop
         )
@@ -129,6 +133,6 @@ class SnipperWindow(QMainWindow):
 
 from components.color_picker import ColorPicker
 from components.capture import NewCapture
-from components.image_label import ImageLabel
+from components.image_label import ImageLabel, ScrollLabel
 from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
 from components.mode_switching import ModeSwitching

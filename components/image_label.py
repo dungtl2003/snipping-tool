@@ -8,7 +8,62 @@ from PyQt6.QtGui import (
     QResizeEvent,
     QWheelEvent,
 )
-from PyQt6.QtWidgets import QLabel, QSizePolicy
+from PyQt6.QtWidgets import QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
+
+
+class ScrollLabel(QScrollArea):
+    def __init__(self) -> None:
+        super().__init__()
+
+        # making widget resizable
+        self.setWidgetResizable(True)
+
+        self.label = ImageLabel()
+        self.setWidget(self.label)
+
+        # making qwidget object
+        # content = QWidget(self)
+        # self.setWidget(content)
+
+        # vertical box layout
+        # lay = QVBoxLayout(content)
+        # self.label = ImageLabel()
+        # lay.addWidget(self.label)
+
+    def get_image(self) -> QImage | None:
+        """
+        Return the image (without scaling).
+
+        :return: the image (if existed)
+        :rtype: QImage or None
+        """
+        return self.label.get_image()
+
+    def is_in_bound(self, glob_point: QPointF) -> bool:
+        """
+        Check if the point is within the image bounds.
+
+        :param glob_point: the global position
+        :type glob_point: QPointF
+        :return: True if the point is within the image bounds, False otherwise
+        :rtype: bool
+        """
+        return self.label.is_in_bound(glob_point)
+
+    def get_original_pixmap_coords_from_global(
+        self, point: QPointF | QPoint
+    ) -> Tuple[float, float] | None:
+        """
+        Get the original pixmap coordinates from the global position.
+        :param point: the global position
+        :type point: QPointF
+        :return: the original pixmap coordinates
+        :rtype: Tuple[float, float] or None
+        """
+        return self.label.get_original_pixmap_coords_from_global(point)
+
+    def setPixmap(self, a0: QPixmap) -> None:
+        self.label.setPixmap(a0)
 
 
 class ImageLabel(QLabel):
