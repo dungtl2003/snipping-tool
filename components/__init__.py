@@ -7,6 +7,7 @@ from components.toolbar import TopToolBar, BottomToolBar, MiddleToolBar
 from components.save import SaveButton
 from components.copy_btn import CopyButton
 from components.image_viewer import ImageViewer
+from components.video_recorder import VideoRecorder
 
 __all__ = [
     "ImageLabel",
@@ -20,4 +21,5 @@ __all__ = [
     "CopyButton",
     "MiddleToolBar",
     "ImageViewer",
+    "VideoRecorder",
 ]

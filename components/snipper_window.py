@@ -1,6 +1,6 @@
 import time
 from typing import Callable, List, Optional, Tuple
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtGui import QIcon, QPixmap, QResizeEvent
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -135,19 +135,30 @@ class SnipperWindow(QMainWindow):
         self.hide()
         time.sleep(0.2)  # wait for main screen to hide
 
-    def __on_post_capture(self, pixmap: QPixmap | None) -> None:
-        if pixmap is None:
+    def __on_post_capture(
+        self,
+        capture_result: Tuple[QRect, QPixmap] | None,
+    ) -> None:
+        if capture_result is None:
             self.show()
             return
 
+        capture_area, capture_pixmap = capture_result
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
-            self.viewer.setPixmap(pixmap)
+            self.viewer.setPixmap(capture_pixmap)
             self.show_with_expand()
         else:
-            pass
+            self.video_recorder = VideoRecorder(
+                capture_area, self.__on_post_video_recording
+            )
+            self.video_recorder.start_recording()
+
+    def __on_post_video_recording(self) -> None:
+        self.show()
 
 
 from components.color_picker import ColorPicker
 from components.capture import NewCapture
 from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
 from components.mode_switching import ModeSwitching
+from components.video_recorder import VideoRecorder
