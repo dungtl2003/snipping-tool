@@ -8,7 +8,7 @@ from PyQt6.QtGui import (
     QResizeEvent,
     QWheelEvent,
 )
-from PyQt6.QtWidgets import QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QScrollArea, QSizePolicy
 
 
 class ScrollLabel(QScrollArea):
@@ -20,15 +20,6 @@ class ScrollLabel(QScrollArea):
 
         self.label = ImageLabel()
         self.setWidget(self.label)
-
-        # making qwidget object
-        # content = QWidget(self)
-        # self.setWidget(content)
-
-        # vertical box layout
-        # lay = QVBoxLayout(content)
-        # self.label = ImageLabel()
-        # lay.addWidget(self.label)
 
     def get_image(self) -> QImage | None:
         """

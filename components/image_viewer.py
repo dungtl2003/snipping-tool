@@ -15,14 +15,14 @@ class ImageViewer(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self.__scroll_area = ScrollArea(self, self.__on_wheel_event)
-        self.__label = ImageLabel(self.__scroll_area)
-        self.__scroll_area.setWidget(self.__label)
+        self.scroll_area = ScrollArea(self, self.__on_wheel_event)
+        self.label = ImageLabel(self.scroll_area)
+        self.scroll_area.setWidget(self.label)
 
         lay = QVBoxLayout(self)
         self.setLayout(lay)
 
-        lay.addWidget(self.__scroll_area)
+        lay.addWidget(self.scroll_area)
 
     def __on_wheel_event(self, a0: Optional[QWheelEvent]) -> None:
         if a0 is None:
@@ -35,55 +35,58 @@ class ImageViewer(QWidget):
             self.__scroll(delta)
 
     def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
-        self.__label.update_image_display(None)
+        self.label.update_image_display(None)
 
     def get_image(self) -> QImage | None:
-        return self.__label.get_image()
+        return self.label.get_image()
 
     def is_in_bound(self, glob_point: QPointF) -> bool:
-        return self.__label.is_in_bound(glob_point)
+        # Check if the click is within the scroll area and the image label
+        return self.scroll_area.is_in_bound(glob_point) and self.label.is_in_bound(
+            glob_point
+        )
 
     def get_original_pixmap_coords_from_global(
         self, point: QPointF | QPoint
     ) -> Tuple[float, float] | None:
-        return self.__label.get_original_pixmap_coords_from_global(point)
+        return self.label.get_original_pixmap_coords_from_global(point)
 
     def setPixmap(self, a0: QPixmap) -> None:
-        self.__label.setPixmap(a0)
+        self.label.setPixmap(a0)
 
     def __zoom(self, delta: int) -> None:
         # Update the display with the new scale factor
-        self.__scroll_area.snapshot()
-        self.__label.update_image_display(delta)
+        self.scroll_area.snapshot()
+        self.label.update_image_display(delta)
 
-        image_size = self.__label.pixmap().size()
-        scroll_area_viewport = self.__scroll_area.viewport()
+        image_size = self.label.pixmap().size()
+        scroll_area_viewport = self.scroll_area.viewport()
         assert scroll_area_viewport is not None
         scroll_area_size = scroll_area_viewport.size()
 
         if image_size.width() > scroll_area_size.width():
-            self.__scroll_area.setHorizontalScrollBarPolicy(
+            self.scroll_area.setHorizontalScrollBarPolicy(
                 Qt.ScrollBarPolicy.ScrollBarAlwaysOn
             )
         else:
-            self.__scroll_area.setHorizontalScrollBarPolicy(
+            self.scroll_area.setHorizontalScrollBarPolicy(
                 Qt.ScrollBarPolicy.ScrollBarAlwaysOff
             )
 
         if image_size.height() > scroll_area_size.height():
-            self.__scroll_area.setVerticalScrollBarPolicy(
+            self.scroll_area.setVerticalScrollBarPolicy(
                 Qt.ScrollBarPolicy.ScrollBarAlwaysOn
             )
         else:
-            self.__scroll_area.setVerticalScrollBarPolicy(
+            self.scroll_area.setVerticalScrollBarPolicy(
                 Qt.ScrollBarPolicy.ScrollBarAlwaysOff
             )
 
-        self.__scroll_area.update()
-        self.__scroll_area.restore()
+        self.scroll_area.update()
+        self.scroll_area.restore()
 
     def __scroll(self, delta: int):
-        self.__scroll_area.scroll_v(delta)
+        self.scroll_area.scroll_v(delta)
 
 
 class ImageLabel(QLabel):
@@ -274,3 +277,18 @@ class ScrollArea(QScrollArea):
             scroll_bar_vertical.setValue(scroll_bar_vertical.value() - 50)
         else:
             scroll_bar_vertical.setValue(scroll_bar_vertical.value() + 50)
+
+    def is_in_bound(self, glob_point: QPointF) -> bool:
+        viewport = self.viewport()
+        assert viewport is not None
+
+        # Get click position relative to the label
+        label_pos = viewport.mapFromGlobal(glob_point)
+        viewport_size = viewport.size()
+
+        return (
+            label_pos.x() >= 0
+            and label_pos.x() < viewport_size.width()
+            and label_pos.y() >= 0
+            and label_pos.y() < viewport_size.height()
+        )

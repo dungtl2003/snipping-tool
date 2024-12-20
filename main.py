@@ -1,6 +1,7 @@
-import sys, os
+import sys
+import os
 
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
 )

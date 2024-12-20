@@ -145,7 +145,7 @@ class Capturer(QWidget):
         )
 
         # Show the selected region
-        self.main.label.setPixmap(selected_region)
+        self.main.viewer.setPixmap(selected_region)
 
     def __capture_all_screens(self) -> QPixmap:
         # Create a combined pixmap for all screens

@@ -3,7 +3,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPixmap, QResizeEvent
 from PyQt6.QtWidgets import (
     QMainWindow,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -19,6 +18,7 @@ APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 
 
 class SnipperWindow(QMainWindow):
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -28,7 +28,7 @@ class SnipperWindow(QMainWindow):
         icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
         self.setWindowIcon(icon)
 
-        self.label = ImageViewer()
+        self.viewer = ImageViewer()
         # self.label = ImageLabel()
 
         self.setFixedSize(450, 100)
@@ -104,7 +104,7 @@ class SnipperWindow(QMainWindow):
             self.__copy,
         )
         # Main section
-        self.label.setVisible(True)
+        self.viewer.setVisible(True)
         # Toolbar (at the bottom)
         self.__toolbar_bottom = BottomToolBar(self.__middle_toolbar)
 
@@ -112,7 +112,7 @@ class SnipperWindow(QMainWindow):
         self.main_layout.addWidget(
             self.__toolbar_top, alignment=Qt.AlignmentFlag.AlignTop
         )
-        self.main_layout.addWidget(self.label)
+        self.main_layout.addWidget(self.viewer)
         self.main_layout.addWidget(
             self.__toolbar_bottom, alignment=Qt.AlignmentFlag.AlignBottom
         )
