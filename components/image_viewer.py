@@ -24,6 +24,53 @@ class ImageViewer(QWidget):
 
         lay.addWidget(self.scroll_area)
 
+    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
+        self.label.update_image_display(None)
+
+    def get_image(self) -> QImage | None:
+        """
+        Return the image (without scaling).
+
+        :return: the image (if existed)
+        :rtype: QImage or None
+        """
+        return self.label.get_image()
+
+    def is_in_bound(self, glob_point: QPointF) -> bool:
+        """
+        Check if the point is within the image bounds.
+
+        :param glob_point: the global position
+        :type glob_point: QPointF
+        :return: True if the point is within the image bounds, False otherwise
+        :rtype: bool
+        """
+        # Check if the click is within the scroll area and the image label
+        return self.scroll_area.is_in_bound(glob_point) and self.label.is_in_bound(
+            glob_point
+        )
+
+    def get_original_pixmap_coords_from_global(
+        self, point: QPointF | QPoint
+    ) -> Tuple[float, float] | None:
+        """
+        Get the original pixmap coordinates from the global position.
+        :param point: the global position
+        :type point: QPointF
+        :return: the original pixmap coordinates
+        :rtype: Tuple[float, float] or None
+        """
+        return self.label.get_original_pixmap_coords_from_global(point)
+
+    def setPixmap(self, a0: QPixmap) -> None:
+        """
+        Set the pixmap to the label.
+        :param a0: the pixmap
+        :type a0: QPixmap
+        :return: None
+        """
+        self.label.setPixmap(a0)
+
     def __on_wheel_event(self, a0: Optional[QWheelEvent]) -> None:
         if a0 is None:
             raise error("wheelEvent should not be None")
@@ -33,26 +80,6 @@ class ImageViewer(QWidget):
             self.__zoom(delta)
         else:  # Scroll
             self.__scroll(delta)
-
-    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
-        self.label.update_image_display(None)
-
-    def get_image(self) -> QImage | None:
-        return self.label.get_image()
-
-    def is_in_bound(self, glob_point: QPointF) -> bool:
-        # Check if the click is within the scroll area and the image label
-        return self.scroll_area.is_in_bound(glob_point) and self.label.is_in_bound(
-            glob_point
-        )
-
-    def get_original_pixmap_coords_from_global(
-        self, point: QPointF | QPoint
-    ) -> Tuple[float, float] | None:
-        return self.label.get_original_pixmap_coords_from_global(point)
-
-    def setPixmap(self, a0: QPixmap) -> None:
-        self.label.setPixmap(a0)
 
     def __zoom(self, delta: int) -> None:
         # Update the display with the new scale factor
@@ -101,6 +128,11 @@ class ImageLabel(QLabel):
         self.__parent = parent
 
     def get_image(self) -> QImage | None:
+        """
+        Return the image (without scaling).
+        :return: the image (if existed)
+        :rtype: QImage or None
+        """
         return (
             None if self.__original_pixmap is None else self.__original_pixmap.toImage()
         )
@@ -126,6 +158,13 @@ class ImageLabel(QLabel):
     def get_original_pixmap_coords_from_global(
         self, point: QPointF | QPoint
     ) -> Tuple[float, float] | None:
+        """
+        Get the original pixmap coordinates from the global position.
+        :param point: the global position
+        :type point: QPointF
+        :return: the original pixmap coordinates
+        :rtype: Tuple[float, float] or None
+        """
         if self.__original_pixmap is None:
             return
 
@@ -151,25 +190,22 @@ class ImageLabel(QLabel):
         return (original_x, original_y)
 
     def setPixmap(self, a0: QPixmap) -> None:
+        """
+        Set the pixmap to the label.
+        :param a0: the pixmap
+        :type a0: QPixmap
+        :return: None
+        """
         self.__original_pixmap = a0
         self.update_image_display(None)
 
-    def __get_pixmap_coords_from_global_unchecked(
-        self, point: QPointF | QPoint
-    ) -> Tuple[float, float]:
-        label_pos = self.mapFromGlobal(point)
-
-        # Get scaled image offset relative to the label
-        pixmap_offset_x = (self.width() - self.pixmap().width()) / 2
-        pixmap_offset_y = (self.height() - self.pixmap().height()) / 2
-
-        # Get click position relative to the scaled image
-        pixmap_x = label_pos.x() - pixmap_offset_x
-        pixmap_y = label_pos.y() - pixmap_offset_y
-
-        return (pixmap_x, pixmap_y)
-
     def update_image_display(self, delta: int | None) -> None:
+        """
+        Update the image display based on the zoom factor and the scroll direction.
+        :param delta: the scroll direction
+        :type delta: int or None
+        :return: None
+        """
         if self.__original_pixmap is None:
             return
 
@@ -199,13 +235,20 @@ class ImageLabel(QLabel):
         # Set the scaled or original pixmap to the QLabel
         super().setPixmap(scaled_pixmap)
 
-    def restore_scroll_position(
-        self, scroll_area, horizontal_scroll_pos, vertical_scroll_pos
-    ):
-        """Restore the scroll position after the layout update."""
-        # Ensure the scroll bar positions are restored after the layout is complete
-        scroll_area.horizontalScrollBar().setValue(horizontal_scroll_pos)
-        scroll_area.verticalScrollBar().setValue(vertical_scroll_pos)
+    def __get_pixmap_coords_from_global_unchecked(
+        self, point: QPointF | QPoint
+    ) -> Tuple[float, float]:
+        label_pos = self.mapFromGlobal(point)
+
+        # Get scaled image offset relative to the label
+        pixmap_offset_x = (self.width() - self.pixmap().width()) / 2
+        pixmap_offset_y = (self.height() - self.pixmap().height()) / 2
+
+        # Get click position relative to the scaled image
+        pixmap_x = label_pos.x() - pixmap_offset_x
+        pixmap_y = label_pos.y() - pixmap_offset_y
+
+        return (pixmap_x, pixmap_y)
 
     def __is_in_bound(
         self, point: Tuple[float, float], area: Tuple[float, float]
@@ -269,7 +312,12 @@ class ScrollArea(QScrollArea):
         self.__on_wheel_event(a0)
 
     def scroll_v(self, delta: int) -> None:
-        """Scroll the image if it's larger than the label size."""
+        """
+        Scroll vertically.
+        :param delta: the delta value
+        :type delta: int
+        :return: None
+        """
         # Scroll vertically
         scroll_bar_vertical = self.verticalScrollBar()
         assert scroll_bar_vertical is not None
@@ -279,6 +327,13 @@ class ScrollArea(QScrollArea):
             scroll_bar_vertical.setValue(scroll_bar_vertical.value() + 50)
 
     def is_in_bound(self, glob_point: QPointF) -> bool:
+        """
+        Check if the point is within the scroll area bounds.
+        :param glob_point: the global position
+        :type glob_point: QPointF
+        :return: True if the point is within the scroll area bounds, False otherwise
+        :rtype: bool
+        """
         viewport = self.viewport()
         assert viewport is not None
 
