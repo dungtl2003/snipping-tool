@@ -247,4 +247,4 @@ from components.mode_switching import ModeSwitching
 from components.capture import NewCapture
 from components.color_picker import ColorPicker
 from components.save import SaveButton
-from components.copy import CopyButton
+from components.copy_btn import CopyButton

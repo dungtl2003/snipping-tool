@@ -1,3 +1,4 @@
+import time
 from typing import Callable, List, Optional, Tuple
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPixmap, QResizeEvent
@@ -6,7 +7,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from components.copy import CopyButton
+from components.copy_btn import CopyButton
 from components.image_viewer import ImageViewer
 from components.save import SaveButton
 from definitions import ICON_DIR
@@ -124,15 +125,29 @@ class SnipperWindow(QMainWindow):
         Init the functions.
         :return: None
         """
-        self.__new_capture = NewCapture(self)
+        self.__new_capture = NewCapture(self.__on_pre_capture, self.__on_post_capture)
         self.__mode_switching = ModeSwitching()
         self.__color_picker = ColorPicker(self)
         self.__save = SaveButton()
         self.__copy = CopyButton()
 
+    def __on_pre_capture(self) -> None:
+        self.hide()
+        time.sleep(0.2)  # wait for main screen to hide
+
+    def __on_post_capture(self, pixmap: QPixmap | None) -> None:
+        if pixmap is None:
+            self.show()
+            return
+
+        if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
+            self.viewer.setPixmap(pixmap)
+            self.show_with_expand()
+        else:
+            pass
+
 
 from components.color_picker import ColorPicker
 from components.capture import NewCapture
-from components.image_label import ImageLabel, ScrollLabel
 from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
 from components.mode_switching import ModeSwitching

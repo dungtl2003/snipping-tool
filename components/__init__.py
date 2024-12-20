@@ -5,7 +5,7 @@ from components.color_picker import ColorPicker
 from components.mouse_observer import MouseObserver
 from components.toolbar import TopToolBar, BottomToolBar, MiddleToolBar
 from components.save import SaveButton
-from components.copy import CopyButton
+from components.copy_btn import CopyButton
 from components.image_viewer import ImageViewer
 
 __all__ = [
