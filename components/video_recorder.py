@@ -1,40 +1,54 @@
-import qimage2ndarray
+from enum import Enum
+import threading
+import platform
 import time
+from numpy.lib import math
 from typing import Callable, Optional
 from PyQt6.QtGui import (
     QBrush,
     QColor,
-    QImage,
     QMouseEvent,
     QPaintEvent,
     QPainter,
-    QPixmap,
     QRegion,
 )
 import cv2
 import pyaudio
-import numpy as np
-import subprocess
 import wave
-from Xlib import X, display
-from Xlib.protocol import request
-import threading
+import asyncio
+import multiprocessing
+from globals import processes
 
-from PyQt6.QtCore import QElapsedTimer, QPoint, QPointF, QRect, QTimer, Qt
-from PyQt6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtCore import QElapsedTimer, QRect, QTimer, Qt
+from PyQt6.QtWidgets import QPushButton, QWidget
 
 from components import utils
+from functionalities.video_processing import merge_with_audio_ffmpeg
+
+
+class VideoType(Enum):
+    MP4 = 1
+    AVI = 2
 
 
 class VideoRecorder(QWidget):
-    def __init__(self, capture_area: QRect, on_finish: Callable[[], None]) -> None:
+    def __init__(
+        self,
+        capture_area: QRect,
+        on_finish: Callable[[], None],
+        video_type: VideoType = VideoType.MP4,
+    ) -> None:
         super().__init__()
 
-        # self.set_on_all_desktops()
         self.__capture_area = capture_area
         self.__on_finish = on_finish
+        self.__temp_video_file_name = "video.avi"
+        self.__temp_audio_file_name = "audio.wav"
+        self.__video_type = video_type
+        self.__fps = 20.0
 
         # UI setup
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowFlags(
             self.windowFlags()
             | Qt.WindowType.FramelessWindowHint
@@ -43,179 +57,74 @@ class VideoRecorder(QWidget):
             | Qt.WindowType.Tool
             | Qt.WindowType.MaximizeUsingFullscreenGeometryHint
         )
-        # self.setAttribute(Qt.WidgetAttribute.WA_InputMethodTransparent, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        # self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
-        # self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        full_geometry = utils.get_combined_screen_geometry()
+
+        full_geometry = utils.get_combined_screen_geometry_mss()
         self.setGeometry(full_geometry)
 
-        # Capture settings
-        self.__recording = False
-        self.__elapsed_time = QElapsedTimer()
-
-        # OpenCV setup
-        self.fourcc = cv2.VideoWriter.fourcc(*"mp4v")
-        self.video_out = None
-        self.video_timer = QTimer(self)
-        self.video_timer.timeout.connect(self.record_video_frame)
-        self.video_timer.setSingleShot(False)
-
-        # Audio setup
-        # self.audio_out = "audio.wav"
-        # self.__audio_stream = None
-        # self.audio_frames = []
-        # self.audio_format = pyaudio.paInt16
-        # self.channels = 1
-        # self.rate = 44100
-        # self.chunk = 1024
-        # self.p = pyaudio.PyAudio()
-
         self.hide()
-        self.stop_button_wrapper = StopBtnWrapper(self.stop_recording)
-        self.stop_button_wrapper.raise_()
-        self.stop_button_wrapper.hide()
+        self.__stop_button_wrapper = StopBtnWrapper(self.stop_recording)
+        self.__stop_button_wrapper.raise_()
+        self.__stop_button_wrapper.hide()
 
-    #
-    # def mousePressEvent(self, a0: Optional[QMouseEvent]) -> None:
-    #     """Handle mouse press events."""
-    #     assert a0 is not None
-    #     print("Mouse press")
-    #
-    #     # Check if the mouse click is inside the button's geometry
-    #     if self.stop_button.geometry().contains(a0.pos()):
-    #         # Forward the event to the button
-    #         self.stop_button.click()
-    #     else:
-    #         # Ignore other mouse events
-    #         pass
+        self.__elapsed_time = QElapsedTimer()
+        self.__timer = QTimer(self)
+        self.__timer.timeout.connect(self.__update_button_text)
+        self.__timer.start(100)
 
     def start_recording(self):
         """Start recording video and audio."""
-        self.__recording = True
         self.__elapsed_time.start()
 
+        # Setup visual
         self.showFullScreen()
-        self.stop_button_wrapper.show()
+        self.__stop_button_wrapper.show()
 
-        # Start video recording
-        self.video_out = cv2.VideoWriter(
-            "video.mp4",
-            self.fourcc,
-            60.0,
-            (self.__capture_area.width(), self.__capture_area.height()),
+        self.__audio_recorder = AudioRecorder(self.__temp_audio_file_name)
+        self.__screen_recorder = ScreenRecorder(
+            self.__capture_area, self.__temp_video_file_name, self.__fps
         )
-        self.video_timer.start(16)  # Record every ~16ms for 60 FPS
 
-        # Start audio recording
-        # self.__audio_stream = self.p.open(
-        #     format=self.audio_format,
-        #     channels=self.channels,
-        #     rate=self.rate,
-        #     input=True,
-        #     frames_per_buffer=self.chunk,
-        # )
-        # self.audio_frames = []
+        asyncio.run(self.__start_tasks())
 
-    def record_video_frame(self):
-        """Capture the current video frame."""
-        if not self.__recording:
-            return
+    async def __start_tasks(self):
+        screen_task = asyncio.create_task(self.__screen_recorder.start())
+        audio_task = asyncio.create_task(self.__audio_recorder.start())
 
-        combine_pixmap = utils.capture_all_screens()
-        capture_pixmap = combine_pixmap.copy(self.__capture_area)
-        frame_rgb = qimage2ndarray.rgb_view(capture_pixmap.toImage())
-        frame_rgb = cv2.cvtColor(frame_rgb, cv2.COLOR_BGR2RGB)
-        assert self.video_out is not None
-        self.video_out.write(frame_rgb)
-
-        elapsed = self.__elapsed_time.elapsed() // 1000
-        self.stop_button_wrapper.stop_button.setText(
-            f"● {elapsed // 60:02}:{elapsed % 60:02}"
-        )
+        await asyncio.gather(audio_task, screen_task)
 
     def stop_recording(self):
         """Stop recording and merge audio and video."""
-        self.__recording = False
-        self.video_timer.stop()
+        asyncio.run(self.__stop_tasks())
 
-        # Stop video recording
-        if self.video_out:
-            self.video_out.release()
-
-        # Stop audio recording
-        # assert self.__audio_stream is not None
-        # self.__audio_stream.stop_stream()
-        # self.__audio_stream.close()
-        # self.p.terminate()
-
-        # Save audio
-        # with wave.open(self.audio_out, "wb") as wf:
-        #     wf.setnchannels(self.channels)
-        #     wf.setsampwidth(self.p.get_sample_size(self.audio_format))
-        #     wf.setframerate(self.rate)
-        #     wf.writeframes(b"".join(self.audio_frames))
+        self.close()
+        self.__stop_button_wrapper.close()
 
         # Merge audio and video
-        # self.merge_audio_video("video.avi", self.audio_out, "output_with_audio.avi")
-        self.close()
-        self.stop_button_wrapper.close()
-        cv2.destroyAllWindows()
-
-        self.format_video()
+        print("Merging audio and video")
+        extension = "mp4" if self.__video_type == VideoType.MP4 else "avi"
+        output_file = f"output_with_audio.{extension}"
+        actual_duration = self.__elapsed_time.elapsed() / 1000
+        merge_with_audio_ffmpeg(
+            self.__temp_video_file_name,
+            self.__temp_audio_file_name,
+            output_file,
+            self.__fps,
+            actual_duration,
+        )
 
         self.__on_finish()
 
-    def format_video(self):
-        # TODO: temp fix, remove this in the future
-        command = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            "video.mp4",
-            "-c:v",
-            "libx264",
-            "output.mp4",
-        ]
-        subprocess.run(command)
+    async def __stop_tasks(self):
+        audio_task = asyncio.create_task(self.__audio_recorder.stop())
+        screen_task = asyncio.create_task(self.__screen_recorder.stop())
 
-        command = [
-            "rm",
-            "video.mp4",
-        ]
-        subprocess.run(command)
+        await asyncio.gather(audio_task, screen_task)
 
-    def merge_audio_video(self, video_file, audio_file, output_file):
-        """Merge video and audio using ffmpeg."""
-        command = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            video_file,
-            "-i",
-            audio_file,
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-strict",
-            "experimental",
-            output_file,
-        ]
-        subprocess.run(command)
-
-    # def qimage_to_cv2(self, qimage: QImage) -> np.ndarray:
-    #     """Convert QImage to OpenCV format."""
-    #     incoming_image = qimage.convertToFormat(QImage.Format.Format_RGBA8888)
-    #
-    #     width = incoming_image.width()
-    #     height = incoming_image.height()
-    #
-    #     ptr = incoming_image.bits()
-    #     assert ptr is not None
-    #     ptr.setsize(height * width * 4)
-    #     arr = np.frombuffer(ptr, np.uint8).reshape((height, width, 4))
-    #     return arr
+    def __update_button_text(self):
+        elapsed = self.__elapsed_time.elapsed() // 1000
+        self.__stop_button_wrapper.stop_button.setText(
+            f"● {elapsed // 60:02}:{elapsed % 60:02}"
+        )
 
     def paintEvent(self, a0: Optional[QPaintEvent]) -> None:
         """Darken the screen and highlight the selected area."""
@@ -232,6 +141,223 @@ class VideoRecorder(QWidget):
         painter.setClipRegion(overlay_region)
 
         painter.drawRect(self.rect())
+
+
+class ScreenRecorder:
+    def __init__(
+        self,
+        capture_area: QRect,
+        filename: str,
+        fps: float,
+    ) -> None:
+        self.__capture_area = capture_area
+        self.total_frames = 0
+        self.__fps = fps
+        self.__width, self.__height = capture_area.width(), capture_area.height()
+        self.__fourcc = cv2.VideoWriter.fourcc(*"XVID")
+        self.__filename = filename
+
+        self.__is_recording = multiprocessing.Event()
+        self.__manager = multiprocessing.Manager()
+        processes.append(self.__manager)
+        self.__shared_frame = self.__manager.dict()
+
+    async def start(self) -> None:
+        if self.__is_recording.is_set():
+            return
+        self.__is_recording.set()
+
+        self.__recording_process = multiprocessing.Process(
+            target=self.record,
+            daemon=True,
+            args=(
+                self.__filename,
+                self.__fourcc,
+                self.__fps,
+                self.__width,
+                self.__height,
+            ),
+        )
+        self.__calc_frame_process = multiprocessing.Process(
+            target=self.__calculate_frame, daemon=True, args=(self.__capture_area,)
+        )
+        processes.append(self.__recording_process)
+        processes.append(self.__calc_frame_process)
+
+        self.__recording_process.start()
+        self.__calc_frame_process.start()
+        print("Screen recording started")
+
+    def record(
+        self,
+        filename: str,
+        fourcc: int,
+        fps: float,
+        width: int,
+        height: int,
+    ) -> None:
+        print(
+            f"filename: {filename}, fourcc: {fourcc}, fps: {fps}, width: {width}, height: {height}"
+        )
+        if not self.__is_recording.is_set():
+            return
+
+        video_out = cv2.VideoWriter(
+            filename,
+            fourcc,
+            fps,
+            (width, height),
+        )
+
+        interval = math.floor(1000 / fps)
+        prev_frame_time = math.floor(time.time() * 1000)
+        new_frame_time = None
+        # Capture video frame
+        while self.__is_recording.is_set():
+            last_frame = self.__shared_frame.get("last_frame")
+            # if last_frame is not None:
+            if last_frame is not None and (
+                new_frame_time is None or new_frame_time - prev_frame_time >= interval
+            ):
+                new_frame_time = math.floor(time.time() * 1000)
+                fps = 1000 / (new_frame_time - prev_frame_time)
+                print(f"FPS: {int(fps)}")
+                prev_frame_time = new_frame_time
+                video_out.write(last_frame)
+                self.total_frames += 1
+            else:
+                new_frame_time = math.floor(time.time() * 1000)
+
+        video_out.release()
+        cv2.destroyAllWindows()
+        print("Video saved")
+
+    def __calculate_frame(self, capture_area: QRect) -> None:
+        if not self.__is_recording.is_set():
+            return
+
+        while self.__is_recording.is_set():
+            frame_bgr = utils.capture_mss_2(capture_area)
+            self.__shared_frame["last_frame"] = frame_bgr
+
+    async def stop(self) -> None:
+        if not self.__is_recording.is_set():
+            return
+
+        self.__is_recording.clear()
+        if self.__recording_process and self.__recording_process.is_alive():
+            self.__recording_process.join()
+            processes.remove(self.__recording_process)
+
+        if self.__calc_frame_process and self.__calc_frame_process.is_alive():
+            self.__calc_frame_process.join()
+            processes.remove(self.__calc_frame_process)
+
+        self.__manager.shutdown()
+
+
+class AudioRecorder:
+    def __init__(
+        self,
+        filename: str,
+        channels: int = 2,
+        rate: int = 44100,
+        chunk: int = 1024,
+    ) -> None:
+        self.__filename = filename
+        self.__channels = channels
+        self.__rate = rate
+        self.__chunk = chunk
+        self.__frames = []
+        self.__stream = None
+        self.__is_recording = False
+
+    async def start(self) -> None:
+        if self.__is_recording:
+            return
+
+        self.__p = pyaudio.PyAudio()
+        default_device = self.__find_default_device()
+        if default_device is None:
+            print("No default audio device found")
+            return
+
+        index, _ = default_device
+        self.__stream = self.__p.open(
+            format=pyaudio.paInt16,
+            channels=self.__channels,
+            rate=self.__rate,
+            input=True,
+            frames_per_buffer=self.__chunk,
+            input_device_index=index,
+        )
+        self.__is_recording = True
+        self.__t = threading.Thread(target=self.record, daemon=True)
+        self.__t.start()
+        print("Audio recording started")
+
+    def record(self) -> None:
+        if not self.__is_recording:
+            return
+
+        while self.__is_recording and self.__stream and self.__stream.is_active():
+            data = self.__stream.read(self.__chunk)
+            self.__frames.append(data)
+
+    async def stop(self) -> None:
+        if not self.__is_recording:
+            return
+
+        self.__is_recording = False
+        if self.__t and self.__t.is_alive():
+            self.__t.join()
+
+        if self.__stream:
+            self.__stream.stop_stream()
+            self.__stream.close()
+
+        self.__p.terminate()
+        with wave.open(self.__filename, "wb") as wf:
+            wf.setnchannels(self.__channels)
+            wf.setsampwidth(self.__p.get_sample_size(pyaudio.paInt16))
+            wf.setframerate(self.__rate)
+            wf.writeframes(b"".join(self.__frames))
+
+        print("Audio saved")
+
+    def __find_default_device(self) -> tuple[int, str] | None:
+        assert self.__p is not None
+
+        os_name = platform.system()
+        best_device: tuple[int, str] | None = None
+
+        print(f"Detected OS: {os_name}")
+        print("Searching for the best input device...")
+
+        for i in range(self.__p.get_device_count()):
+            device_info = self.__p.get_device_info_by_index(i)
+            max_input_channels: float = float(device_info["maxInputChannels"])
+            device_name: str = str(device_info["name"]).lower()
+
+            if max_input_channels > 0:
+                if os_name == "Windows":
+                    # On Windows, prefer devices with "Microphone" in their name
+                    if "microphone" in device_name:
+                        best_device = (i, device_name)
+                        break
+                elif os_name == "Linux":
+                    # On Linux, prefer devices associated with PulseAudio or PipeWire
+                    if "pipewire" in device_name or "pulse" in device_name:
+                        best_device = (i, device_name)
+                        break
+                elif best_device is None:
+                    best_device = (i, device_name)
+
+        if best_device is not None:
+            index, device_name = best_device
+            print(f"Selected audio device: {device_name} (index: {index})")
+
+        return best_device
 
 
 class StopBtnWrapper(QWidget):

@@ -53,7 +53,7 @@ class SnapshotOverlay(QWidget):
         self.__on_capture = on_capture
 
         # Calculate the geometry that covers all screens
-        self.__full_geometry = utils.get_combined_screen_geometry()
+        self.__full_geometry = utils.get_combined_screen_geometry_mss()
         self.setWindowFlags(
             self.windowFlags()
             | Qt.WindowType.FramelessWindowHint
@@ -64,7 +64,7 @@ class SnapshotOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
         QApplication.setOverrideCursor(utils.create_white_cross_cursor())
 
-        self.__screen_pixmap = utils.capture_all_screens()
+        self.__screen_pixmap = utils.capture_all_screens_mss()
         self.__selection_start = QPoint()
         self.__selection_rect = QRect()
 

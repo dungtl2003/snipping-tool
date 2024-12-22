@@ -1,25 +1,13 @@
-from typing import cast
+from PIL import Image
 from PyQt6.QtCore import QRect, QSize, Qt
-from PyQt6.QtGui import QCursor, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QCursor, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication
 from PyQt6.sip import voidptr
-
-
-def capture_all_screens() -> QPixmap:
-    # Create a combined pixmap for all screens
-    full_geometry = get_combined_screen_geometry()
-    combined_pixmap = QPixmap(full_geometry.size())
-    combined_pixmap.fill(Qt.GlobalColor.transparent)  # Fill with transparency
-
-    # Paint each screen’s pixmap onto the combined pixmap
-    painter = QPainter(combined_pixmap)
-    for screen in QApplication.screens():
-        screen_geometry = screen.geometry()
-        pixmap = screen.grabWindow(cast(voidptr, 0))
-        painter.drawPixmap(screen_geometry.topLeft() - full_geometry.topLeft(), pixmap)
-    painter.end()
-
-    return combined_pixmap
+import cv2
+from cv2.typing import MatLike
+import mss
+import mss.tools
+import numpy as np
 
 
 def create_white_cross_cursor() -> QCursor:
@@ -42,10 +30,158 @@ def create_white_cross_cursor() -> QCursor:
     return QCursor(pixmap)
 
 
-def get_combined_screen_geometry() -> QRect:
-    """Calculate the union of all screens' geometries."""
-    # Calculate the union of all screens' geometries
-    screen_geometry = QRect()
-    for screen in QApplication.screens():
-        screen_geometry = screen_geometry.united(screen.geometry())
-    return screen_geometry
+def capture(rect: QRect) -> QPixmap | None:
+
+    # Get the available screens (monitors)
+    screens = QApplication.screens()
+
+    # List to store QPixmaps for each monitor
+    pixmaps = []
+
+    for screen in screens:
+        screen_geometry = screen.geometry()
+
+        # Check if the rect intersects with the screen geometry
+        if screen_geometry.intersects(rect):
+            # Calculate the intersection of the QRect with the screen's geometry
+            intersection_rect = rect.intersected(screen_geometry)
+
+            # Grab the screen content for the intersection area
+            pixmap = screen.grabWindow(
+                voidptr(0),
+                intersection_rect.x(),
+                intersection_rect.y(),
+                intersection_rect.width(),
+                intersection_rect.height(),
+            )
+            pixmaps.append(pixmap)
+
+    # Now, combine the captured pixmaps from multiple monitors
+    if pixmaps:
+        # Create a final combined QPixmap (we will assume rect is large enough to cover all the screens)
+        combined_pixmap = QPixmap(rect.size())
+        painter = QPainter(combined_pixmap)
+
+        # Paste each captured pixmap into the final combined pixmap
+        for pixmap in pixmaps:
+            painter.drawPixmap(pixmap.rect(), pixmap)
+
+        painter.end()
+        return combined_pixmap
+    return None
+
+
+def get_combined_screen_geometry_mss() -> QRect:
+    with mss.mss() as sct:
+        combined_monitor = sct.monitors[0]
+        return QRect(
+            combined_monitor["left"],
+            combined_monitor["top"],
+            combined_monitor["width"],
+            combined_monitor["height"],
+        )
+
+
+def capture_all_screens_mss() -> QPixmap:
+    with mss.mss() as sct:
+        combined_monitor = sct.monitors[0]
+
+        screenshot = sct.grab(
+            (
+                combined_monitor["left"],
+                combined_monitor["top"],
+                combined_monitor["width"],
+                combined_monitor["height"],
+            )
+        )
+        print(f"Screenshot: {screenshot.size}")
+        print(f"Monitor: {combined_monitor}")
+
+        img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
+        img = img.convert("RGBA")
+        img = QImage(
+            img.tobytes("raw", "RGBA"),
+            img.size[0],
+            img.size[1],
+            QImage.Format.Format_RGBA8888,
+        )
+
+        pixmap = QPixmap.fromImage(img)
+        return pixmap
+
+
+def capture_mss(rect: QRect) -> QPixmap | None:
+    with mss.mss() as sct:
+        # List of monitors
+        combined_monitor = sct.monitors[0]
+
+        # Check if the rect intersects with the screen geometry
+        screen_geometry = QRect(
+            combined_monitor["left"],
+            combined_monitor["top"],
+            combined_monitor["width"],
+            combined_monitor["height"],
+        )
+
+        if not screen_geometry.intersects(rect):
+            return None
+
+        # Calculate the intersection of the QRect with the screen's geometry
+        intersection_rect = rect.intersected(screen_geometry)
+
+        # Capture the screen content for the intersection area
+        screenshot = sct.grab(
+            (
+                intersection_rect.x(),
+                intersection_rect.y(),
+                intersection_rect.width()
+                + intersection_rect.x(),  # idk why but this is needed
+                intersection_rect.height() + intersection_rect.y(),
+            )
+        )
+
+        img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
+        img = img.convert("RGBA")
+        img = QImage(
+            img.tobytes("raw", "RGBA"),
+            img.size[0],
+            img.size[1],
+            QImage.Format.Format_RGBA8888,
+        )
+
+        pixmap = QPixmap.fromImage(img)
+        return pixmap
+
+
+def capture_mss_2(rect: QRect) -> MatLike | None:
+    with mss.mss() as sct:
+        # List of monitors
+        combined_monitor = sct.monitors[0]
+
+        # Check if the rect intersects with the screen geometry
+        screen_geometry = QRect(
+            combined_monitor["left"],
+            combined_monitor["top"],
+            combined_monitor["width"],
+            combined_monitor["height"],
+        )
+
+        if not screen_geometry.intersects(rect):
+            return None
+
+        # Calculate the intersection of the QRect with the screen's geometry
+        intersection_rect = rect.intersected(screen_geometry)
+
+        # Capture the screen content for the intersection area
+        screenshot = sct.grab(
+            (
+                intersection_rect.x(),
+                intersection_rect.y(),
+                intersection_rect.width()
+                + intersection_rect.x(),  # idk why but this is needed
+                intersection_rect.height() + intersection_rect.y(),
+            )
+        )  # BGRA
+
+        frame_bgr = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2BGR)
+        return frame_bgr
