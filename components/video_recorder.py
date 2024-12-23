@@ -16,14 +16,16 @@ import cv2
 import pyaudio
 import wave
 import asyncio
+from multiprocessing import Process, Manager
 import multiprocessing
+
 from globals import processes
 
 from PyQt6.QtCore import QElapsedTimer, QRect, QTimer, Qt
 from PyQt6.QtWidgets import QPushButton, QWidget
 
 from components import utils
-from functionalities.video_processing import merge_with_audio_ffmpeg
+from functionalities.video_processing import process_video_and_audio_ffmpeg
 
 
 class VideoType(Enum):
@@ -45,7 +47,7 @@ class VideoRecorder(QWidget):
         self.__temp_video_file_name = "video.avi"
         self.__temp_audio_file_name = "audio.wav"
         self.__video_type = video_type
-        self.__fps = 20.0
+        self.__fps = 30.0
 
         # UI setup
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -86,12 +88,6 @@ class VideoRecorder(QWidget):
 
         asyncio.run(self.__start_tasks())
 
-    async def __start_tasks(self):
-        screen_task = asyncio.create_task(self.__screen_recorder.start())
-        audio_task = asyncio.create_task(self.__audio_recorder.start())
-
-        await asyncio.gather(audio_task, screen_task)
-
     def stop_recording(self):
         """Stop recording and merge audio and video."""
         asyncio.run(self.__stop_tasks())
@@ -104,7 +100,7 @@ class VideoRecorder(QWidget):
         extension = "mp4" if self.__video_type == VideoType.MP4 else "avi"
         output_file = f"output_with_audio.{extension}"
         actual_duration = self.__elapsed_time.elapsed() / 1000
-        merge_with_audio_ffmpeg(
+        process_video_and_audio_ffmpeg(
             self.__temp_video_file_name,
             self.__temp_audio_file_name,
             output_file,
@@ -119,12 +115,6 @@ class VideoRecorder(QWidget):
         screen_task = asyncio.create_task(self.__screen_recorder.stop())
 
         await asyncio.gather(audio_task, screen_task)
-
-    def __update_button_text(self):
-        elapsed = self.__elapsed_time.elapsed() // 1000
-        self.__stop_button_wrapper.stop_button.setText(
-            f"● {elapsed // 60:02}:{elapsed % 60:02}"
-        )
 
     def paintEvent(self, a0: Optional[QPaintEvent]) -> None:
         """Darken the screen and highlight the selected area."""
@@ -142,6 +132,18 @@ class VideoRecorder(QWidget):
 
         painter.drawRect(self.rect())
 
+    def __update_button_text(self):
+        elapsed = self.__elapsed_time.elapsed() // 1000
+        self.__stop_button_wrapper.stop_button.setText(
+            f"● {elapsed // 60:02}:{elapsed % 60:02}"
+        )
+
+    async def __start_tasks(self):
+        screen_task = asyncio.create_task(self.__screen_recorder.start())
+        audio_task = asyncio.create_task(self.__audio_recorder.start())
+
+        await asyncio.gather(audio_task, screen_task)
+
 
 class ScreenRecorder:
     def __init__(
@@ -151,24 +153,57 @@ class ScreenRecorder:
         fps: float,
     ) -> None:
         self.__capture_area = capture_area
-        self.total_frames = 0
         self.__fps = fps
         self.__width, self.__height = capture_area.width(), capture_area.height()
         self.__fourcc = cv2.VideoWriter.fourcc(*"XVID")
         self.__filename = filename
 
+        # Shared memory
         self.__is_recording = multiprocessing.Event()
-        self.__manager = multiprocessing.Manager()
+        self.__manager = Manager()
+        self.__shared_memory = self.__manager.dict()
+        self.__frame_queue = self.__manager.Queue(maxsize=-1)
         processes.append(self.__manager)
-        self.__shared_frame = self.__manager.dict()
 
     async def start(self) -> None:
         if self.__is_recording.is_set():
             return
         self.__is_recording.set()
 
-        self.__recording_process = multiprocessing.Process(
-            target=self.record,
+        self.__record_thread = threading.Thread(
+            target=self.__record,
+            daemon=True,
+        )
+        self.__record_thread.start()
+
+    async def stop(self) -> None:
+        if not self.__is_recording.is_set():
+            return
+
+        self.__is_recording.clear()
+
+        while self.__record_thread and self.__record_thread.is_alive():
+            self.__record_thread.join()
+
+        self.__manager.shutdown()
+        processes.remove(self.__manager)
+
+        print("Recording process stopped")
+
+    def __record(self):
+        if not self.__is_recording.is_set():
+            return
+
+        self.__shared_memory["total_frames"] = 0
+        self.__shared_memory["latest_frame"] = None
+
+        calc_frame_process = Process(
+            target=self.__calculate_frame_task,
+            daemon=True,
+            args=(self.__capture_area,),
+        )
+        save_frame_process = Process(
+            target=self.__save_frame_task,
             daemon=True,
             args=(
                 self.__filename,
@@ -178,17 +213,49 @@ class ScreenRecorder:
                 self.__height,
             ),
         )
-        self.__calc_frame_process = multiprocessing.Process(
-            target=self.__calculate_frame, daemon=True, args=(self.__capture_area,)
-        )
-        processes.append(self.__recording_process)
-        processes.append(self.__calc_frame_process)
 
-        self.__recording_process.start()
-        self.__calc_frame_process.start()
-        print("Screen recording started")
+        processes.append(calc_frame_process)
+        processes.append(save_frame_process)
 
-    def record(
+        calc_frame_process.start()
+        save_frame_process.start()
+
+        queue = self.__frame_queue
+        interval = math.floor(1000 / self.__fps)
+        previous_frame_time = math.floor(time.time() * 1000)
+        new_frame_time = None
+
+        print("Recording started")
+        while self.__is_recording.is_set():
+            latest_frame = self.__shared_memory.get("latest_frame")
+
+            if latest_frame is not None and (
+                new_frame_time is None
+                or new_frame_time - previous_frame_time >= interval
+            ):
+                new_frame_time = math.floor(time.time() * 1000)
+                fps = 1000 / (new_frame_time - previous_frame_time)
+
+                # Adjust interval based on the current FPS
+                if fps < self.__fps and interval > 1:
+                    interval -= 1
+                elif fps > self.__fps and interval < 1000:
+                    interval += 1
+
+                # print(f"FPS: {int(fps)}")
+                previous_frame_time = new_frame_time
+                queue.put(latest_frame)
+            else:
+                new_frame_time = math.floor(time.time() * 1000)
+
+        calc_frame_process.join()
+        processes.remove(calc_frame_process)
+        save_frame_process.join()
+        processes.remove(save_frame_process)
+
+        print("Recording stopped")
+
+    def __save_frame_task(
         self,
         filename: str,
         fourcc: int,
@@ -196,9 +263,6 @@ class ScreenRecorder:
         width: int,
         height: int,
     ) -> None:
-        print(
-            f"filename: {filename}, fourcc: {fourcc}, fps: {fps}, width: {width}, height: {height}"
-        )
         if not self.__is_recording.is_set():
             return
 
@@ -209,51 +273,27 @@ class ScreenRecorder:
             (width, height),
         )
 
-        interval = math.floor(1000 / fps)
-        prev_frame_time = math.floor(time.time() * 1000)
-        new_frame_time = None
-        # Capture video frame
+        queue = self.__frame_queue
+
         while self.__is_recording.is_set():
-            last_frame = self.__shared_frame.get("last_frame")
-            # if last_frame is not None:
-            if last_frame is not None and (
-                new_frame_time is None or new_frame_time - prev_frame_time >= interval
-            ):
-                new_frame_time = math.floor(time.time() * 1000)
-                fps = 1000 / (new_frame_time - prev_frame_time)
-                print(f"FPS: {int(fps)}")
-                prev_frame_time = new_frame_time
-                video_out.write(last_frame)
-                self.total_frames += 1
-            else:
-                new_frame_time = math.floor(time.time() * 1000)
+            if not queue.empty():
+                frame = queue.get()
+                video_out.write(frame)
+                self.__shared_memory["total_frames"] += 1
+
+        while not queue.empty():
+            frame = queue.get()
+            video_out.write(frame)
+            self.__shared_memory["total_frames"] += 1
 
         video_out.release()
         cv2.destroyAllWindows()
         print("Video saved")
 
-    def __calculate_frame(self, capture_area: QRect) -> None:
-        if not self.__is_recording.is_set():
-            return
-
+    def __calculate_frame_task(self, capture_area: QRect) -> None:
         while self.__is_recording.is_set():
             frame_bgr = utils.capture_mss_2(capture_area)
-            self.__shared_frame["last_frame"] = frame_bgr
-
-    async def stop(self) -> None:
-        if not self.__is_recording.is_set():
-            return
-
-        self.__is_recording.clear()
-        if self.__recording_process and self.__recording_process.is_alive():
-            self.__recording_process.join()
-            processes.remove(self.__recording_process)
-
-        if self.__calc_frame_process and self.__calc_frame_process.is_alive():
-            self.__calc_frame_process.join()
-            processes.remove(self.__calc_frame_process)
-
-        self.__manager.shutdown()
+            self.__shared_memory["latest_frame"] = frame_bgr
 
 
 class AudioRecorder:
@@ -292,17 +332,9 @@ class AudioRecorder:
             input_device_index=index,
         )
         self.__is_recording = True
-        self.__t = threading.Thread(target=self.record, daemon=True)
+        self.__t = threading.Thread(target=self.__record, daemon=True)
         self.__t.start()
         print("Audio recording started")
-
-    def record(self) -> None:
-        if not self.__is_recording:
-            return
-
-        while self.__is_recording and self.__stream and self.__stream.is_active():
-            data = self.__stream.read(self.__chunk)
-            self.__frames.append(data)
 
     async def stop(self) -> None:
         if not self.__is_recording:
@@ -324,6 +356,14 @@ class AudioRecorder:
             wf.writeframes(b"".join(self.__frames))
 
         print("Audio saved")
+
+    def __record(self) -> None:
+        if not self.__is_recording:
+            return
+
+        while self.__is_recording and self.__stream and self.__stream.is_active():
+            data = self.__stream.read(self.__chunk)
+            self.__frames.append(data)
 
     def __find_default_device(self) -> tuple[int, str] | None:
         assert self.__p is not None

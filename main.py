@@ -18,7 +18,7 @@ def error_handler(etype, value, tb):
     print(f"An error occurred: {value}")
     print("Killing all processes")
     kill_all_processes()
-    exit(1)
+    sys.exit(1)
 
 
 if __name__ == "__main__":
