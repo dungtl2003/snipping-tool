@@ -40,10 +40,10 @@ def process_video_and_audio_ffmpeg_raw_command(
 
     # Add audio file if it exists
     if os.path.isfile(audio_file):
-        command.insert(3, "-i")
-        command.insert(4, audio_file)
+        command.insert(4, "-i")
+        command.insert(5, audio_file)
         command.insert(-2, "-c:a")
-        command.insert(-1, "aac")
+        command.insert(-2, "aac")
 
     subprocess.run(command, check=True)
 
