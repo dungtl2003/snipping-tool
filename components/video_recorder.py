@@ -27,7 +27,10 @@ from PyQt6.QtCore import QElapsedTimer, QRect, QTimer, Qt
 from PyQt6.QtWidgets import QPushButton, QWidget
 
 from components import utils
-from functionalities.video_processing import process_video_and_audio_ffmpeg
+from functionalities.video_processing import (
+    process_video_and_audio_ffmpeg_python,
+    process_video_and_audio_ffmpeg_raw_command,
+)
 
 
 def find_default_device(p: pyaudio.PyAudio) -> tuple[int, str] | None:
@@ -228,13 +231,24 @@ class VideoRecorder(QWidget):
         extension = "mp4" if self.__video_type == VideoType.MP4 else "avi"
         output_file = f"output_with_audio.{extension}"
         actual_duration = self.__elapsed_time.elapsed() / 1000
-        process_video_and_audio_ffmpeg(
-            self.__temp_video_file_name,
-            self.__temp_audio_file_name,
-            output_file,
-            self.__fps,
-            actual_duration,
-        )
+        os_name = platform.system()
+
+        if os_name == "Windows":
+            process_video_and_audio_ffmpeg_raw_command(
+                self.__temp_video_file_name,
+                self.__temp_audio_file_name,
+                output_file,
+                self.__fps,
+                actual_duration,
+            )
+        elif os_name == "Linux":
+            process_video_and_audio_ffmpeg_python(
+                self.__temp_video_file_name,
+                self.__temp_audio_file_name,
+                output_file,
+                self.__fps,
+                actual_duration,
+            )
 
         self.__on_finish()
 
