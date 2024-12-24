@@ -17,6 +17,8 @@ import pyaudio
 import wave
 import asyncio
 from multiprocessing import Process, Manager
+from multiprocessing.synchronize import Event
+from multiprocessing.managers import DictProxy
 import multiprocessing
 
 from globals import processes
@@ -26,6 +28,132 @@ from PyQt6.QtWidgets import QPushButton, QWidget
 
 from components import utils
 from functionalities.video_processing import process_video_and_audio_ffmpeg
+
+
+def find_default_device(p: pyaudio.PyAudio) -> tuple[int, str] | None:
+    assert p is not None
+
+    os_name = platform.system()
+    best_device: tuple[int, str] | None = None
+
+    print(f"Detected OS: {os_name}")
+    print("Searching for the best input device...")
+
+    for i in range(p.get_device_count()):
+        device_info = p.get_device_info_by_index(i)
+        # print(f"Device {i}: {device_info}")
+        max_input_channels: float = float(device_info["maxInputChannels"])
+        device_name: str = str(device_info["name"]).lower()
+
+        if max_input_channels > 0:
+            if os_name == "Windows":
+                # On Windows, prefer devices with "Microphone" in their name
+                if "microphone" in device_name:
+                    best_device = (i, device_name)
+                    break
+            elif os_name == "Linux":
+                # On Linux, prefer devices associated with PulseAudio or PipeWire
+                if "pipewire" in device_name or "pulse" in device_name:
+                    best_device = (i, device_name)
+                    break
+            elif best_device is None:
+                best_device = (i, device_name)
+
+    if best_device is not None:
+        index, device_name = best_device
+        print(f"Selected audio device: {device_name} (index: {index})")
+
+    return best_device
+
+
+def record_audio_task(
+    is_recording: Event,
+    filename: str,
+    channels: int,
+    rate: int,
+    chunk: int,
+) -> None:
+    if not is_recording.is_set():
+        return
+
+    p = pyaudio.PyAudio()
+    default_device = find_default_device(p)
+    if default_device is None:
+        print("No default audio device found")
+        return
+
+    index, _ = default_device
+    stream = p.open(
+        format=pyaudio.paInt16,
+        channels=channels,
+        rate=rate,
+        input=True,
+        frames_per_buffer=chunk,
+        input_device_index=index,
+    )
+
+    frames = []
+
+    print("Recording audio...")
+    while is_recording.is_set():
+        data = stream.read(chunk)
+        frames.append(data)
+
+    stream.stop_stream()
+    stream.close()
+
+    p.terminate()
+    with wave.open(filename, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
+        wf.setframerate(rate)
+        wf.writeframes(b"".join(frames))
+
+    print("Audio saved")
+
+
+def save_frame_task(
+    is_recording: Event,
+    frame_queue: multiprocessing.Queue,
+    shared_memory: DictProxy,
+    filename: str,
+    fourcc: int,
+    fps: float,
+    width: int,
+    height: int,
+) -> None:
+    if not is_recording.is_set():
+        return
+
+    video_out = cv2.VideoWriter(
+        filename,
+        fourcc,
+        fps,
+        (width, height),
+    )
+
+    while is_recording.is_set():
+        if not frame_queue.empty():
+            frame = frame_queue.get()
+            video_out.write(frame)
+            shared_memory["total_frames"] += 1
+
+    while not frame_queue.empty():
+        frame = frame_queue.get()
+        video_out.write(frame)
+        shared_memory["total_frames"] += 1
+
+    video_out.release()
+    cv2.destroyAllWindows()
+    print("Video saved")
+
+
+def calculate_frame_task(
+    is_recording: Event, shared_memory: DictProxy, capture_area: QRect
+) -> None:
+    while is_recording.is_set():
+        frame_bgr = utils.capture_mss_2(capture_area)
+        shared_memory["latest_frame"] = frame_bgr
 
 
 class VideoType(Enum):
@@ -198,14 +326,21 @@ class ScreenRecorder:
         self.__shared_memory["latest_frame"] = None
 
         calc_frame_process = Process(
-            target=self.__calculate_frame_task,
-            daemon=True,
-            args=(self.__capture_area,),
-        )
-        save_frame_process = Process(
-            target=self.__save_frame_task,
+            target=calculate_frame_task,
             daemon=True,
             args=(
+                self.__is_recording,
+                self.__shared_memory,
+                self.__capture_area,
+            ),
+        )
+        save_frame_process = Process(
+            target=save_frame_task,
+            daemon=True,
+            args=(
+                self.__is_recording,
+                self.__frame_queue,
+                self.__shared_memory,
                 self.__filename,
                 self.__fourcc,
                 self.__fps,
@@ -255,46 +390,6 @@ class ScreenRecorder:
 
         print("Recording stopped")
 
-    def __save_frame_task(
-        self,
-        filename: str,
-        fourcc: int,
-        fps: float,
-        width: int,
-        height: int,
-    ) -> None:
-        if not self.__is_recording.is_set():
-            return
-
-        video_out = cv2.VideoWriter(
-            filename,
-            fourcc,
-            fps,
-            (width, height),
-        )
-
-        queue = self.__frame_queue
-
-        while self.__is_recording.is_set():
-            if not queue.empty():
-                frame = queue.get()
-                video_out.write(frame)
-                self.__shared_memory["total_frames"] += 1
-
-        while not queue.empty():
-            frame = queue.get()
-            video_out.write(frame)
-            self.__shared_memory["total_frames"] += 1
-
-        video_out.release()
-        cv2.destroyAllWindows()
-        print("Video saved")
-
-    def __calculate_frame_task(self, capture_area: QRect) -> None:
-        while self.__is_recording.is_set():
-            frame_bgr = utils.capture_mss_2(capture_area)
-            self.__shared_memory["latest_frame"] = frame_bgr
-
 
 class AudioRecorder:
     def __init__(
@@ -308,96 +403,38 @@ class AudioRecorder:
         self.__channels = channels
         self.__rate = rate
         self.__chunk = chunk
-        self.__frames = []
-        self.__stream = None
-        self.__is_recording = False
+        self.__is_recording = multiprocessing.Event()
 
     async def start(self) -> None:
-        if self.__is_recording:
+        if self.__is_recording.is_set():
             return
+        self.__is_recording.set()
 
-        self.__p = pyaudio.PyAudio()
-        default_device = self.__find_default_device()
-        if default_device is None:
-            print("No default audio device found")
-            return
-
-        index, _ = default_device
-        self.__stream = self.__p.open(
-            format=pyaudio.paInt16,
-            channels=self.__channels,
-            rate=self.__rate,
-            input=True,
-            frames_per_buffer=self.__chunk,
-            input_device_index=index,
+        self.__record_audio_process = Process(
+            target=record_audio_task,
+            daemon=True,
+            args=(
+                self.__is_recording,
+                self.__filename,
+                self.__channels,
+                self.__rate,
+                self.__chunk,
+            ),
         )
-        self.__is_recording = True
-        self.__t = threading.Thread(target=self.__record, daemon=True)
-        self.__t.start()
-        print("Audio recording started")
+        processes.append(self.__record_audio_process)
+        self.__record_audio_process.start()
 
     async def stop(self) -> None:
-        if not self.__is_recording:
+        if not self.__is_recording.is_set():
             return
 
-        self.__is_recording = False
-        if self.__t and self.__t.is_alive():
-            self.__t.join()
+        self.__is_recording.clear()
 
-        if self.__stream:
-            self.__stream.stop_stream()
-            self.__stream.close()
+        if self.__record_audio_process and self.__record_audio_process.is_alive():
+            self.__record_audio_process.join()
+            processes.remove(self.__record_audio_process)
 
-        self.__p.terminate()
-        with wave.open(self.__filename, "wb") as wf:
-            wf.setnchannels(self.__channels)
-            wf.setsampwidth(self.__p.get_sample_size(pyaudio.paInt16))
-            wf.setframerate(self.__rate)
-            wf.writeframes(b"".join(self.__frames))
-
-        print("Audio saved")
-
-    def __record(self) -> None:
-        if not self.__is_recording:
-            return
-
-        while self.__is_recording and self.__stream and self.__stream.is_active():
-            data = self.__stream.read(self.__chunk)
-            self.__frames.append(data)
-
-    def __find_default_device(self) -> tuple[int, str] | None:
-        assert self.__p is not None
-
-        os_name = platform.system()
-        best_device: tuple[int, str] | None = None
-
-        print(f"Detected OS: {os_name}")
-        print("Searching for the best input device...")
-
-        for i in range(self.__p.get_device_count()):
-            device_info = self.__p.get_device_info_by_index(i)
-            max_input_channels: float = float(device_info["maxInputChannels"])
-            device_name: str = str(device_info["name"]).lower()
-
-            if max_input_channels > 0:
-                if os_name == "Windows":
-                    # On Windows, prefer devices with "Microphone" in their name
-                    if "microphone" in device_name:
-                        best_device = (i, device_name)
-                        break
-                elif os_name == "Linux":
-                    # On Linux, prefer devices associated with PulseAudio or PipeWire
-                    if "pipewire" in device_name or "pulse" in device_name:
-                        best_device = (i, device_name)
-                        break
-                elif best_device is None:
-                    best_device = (i, device_name)
-
-        if best_device is not None:
-            index, device_name = best_device
-            print(f"Selected audio device: {device_name} (index: {index})")
-
-        return best_device
+        print("Audio recording stopped")
 
 
 class StopBtnWrapper(QWidget):
