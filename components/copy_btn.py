@@ -2,7 +2,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QPushButton
 
 import os
-from definitions import ICON_DIR
+from preload import ICON_DIR
 
 COPY_ICON = os.path.join(ICON_DIR, "copy.svg")
 

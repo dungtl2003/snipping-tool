@@ -2,9 +2,14 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QToolBar, QWidget
 
 from utils.styles import qtoolbar_style
+from components.mode_switching import ModeSwitching
+from components.capture import NewCapture
+from components.color_picker import ColorPicker
+from components.save import SaveButton
+from components.copy_btn import CopyButton
 
 import os
-from definitions import ICON_DIR
+from preload import ICON_DIR
 
 MORE_ICON = os.path.join(ICON_DIR, "more.svg")
 
@@ -20,7 +25,7 @@ class BaseToolBar(QToolBar):
 class MiddleToolBar(BaseToolBar):
     def __init__(
         self,
-        eye_dropper: "ColorPicker",
+        eye_dropper: ColorPicker,
     ) -> None:
         super().__init__()
 
@@ -51,11 +56,11 @@ class TopToolBar(BaseToolBar):
     # new     | mode |       eye dropper
     def __init__(
         self,
-        new_capture: "NewCapture",
-        mode_switching: "ModeSwitching",
+        new_capture: NewCapture,
+        mode_switching: ModeSwitching,
         middle_toolbar: MiddleToolBar,
-        save: "SaveButton",
-        copy: "CopyButton",
+        save: SaveButton,
+        copy: CopyButton,
     ) -> None:
         super().__init__()
 
@@ -241,10 +246,3 @@ class BottomToolBar(BaseToolBar):
         """
         self.__layout.removeWidget(self.__middle_toolbar)
         return super().hide()
-
-
-from components.mode_switching import ModeSwitching
-from components.capture import NewCapture
-from components.color_picker import ColorPicker
-from components.save import SaveButton
-from components.copy_btn import CopyButton

@@ -94,8 +94,6 @@ def capture_all_screens_mss() -> QPixmap:
                 combined_monitor["height"],
             )
         )
-        print(f"Screenshot: {screenshot.size}")
-        print(f"Monitor: {combined_monitor}")
 
         img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
         img = img.convert("RGBA")

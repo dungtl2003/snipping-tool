@@ -2,6 +2,7 @@ from enum import Enum
 import threading
 import platform
 import time
+from ffmpeg.nodes import os
 from numpy.lib import math
 from typing import Callable, Optional
 from PyQt6.QtGui import (
@@ -32,6 +33,8 @@ from functionalities.video_processing import (
     process_video_and_audio_ffmpeg_raw_command,
 )
 
+from preload import TEMP_DIR
+
 
 def find_default_device(p: pyaudio.PyAudio) -> tuple[int, str] | None:
     assert p is not None
@@ -44,7 +47,6 @@ def find_default_device(p: pyaudio.PyAudio) -> tuple[int, str] | None:
 
     for i in range(p.get_device_count()):
         device_info = p.get_device_info_by_index(i)
-        # print(f"Device {i}: {device_info}")
         max_input_channels: float = float(device_info["maxInputChannels"])
         device_name: str = str(device_info["name"]).lower()
 
@@ -169,15 +171,14 @@ class VideoRecorder(QWidget):
         self,
         capture_area: QRect,
         on_finish: Callable[[], None],
-        video_type: VideoType = VideoType.MP4,
     ) -> None:
         super().__init__()
 
         self.__capture_area = capture_area
         self.__on_finish = on_finish
-        self.__temp_video_file_name = "video.avi"
-        self.__temp_audio_file_name = "audio.wav"
-        self.__video_type = video_type
+        self.__temp_video_file_path = os.path.join(TEMP_DIR, "video.avi")
+        self.__temp_audio_file_path = os.path.join(TEMP_DIR, "audio.wav")
+        self.video_file_path = os.path.join(TEMP_DIR, "output.mp4")
         self.__fps = 30.0
 
         # UI setup
@@ -206,15 +207,25 @@ class VideoRecorder(QWidget):
 
     def start_recording(self):
         """Start recording video and audio."""
+        if os.path.exists(self.__temp_video_file_path):
+            print("Removing existing video file")
+            os.remove(self.__temp_video_file_path)
+        if os.path.exists(self.__temp_audio_file_path):
+            print("Removing existing audio file")
+            os.remove(self.__temp_audio_file_path)
+        if os.path.exists(self.video_file_path):
+            print("Removing existing output file")
+            os.remove(self.video_file_path)
+
         self.__elapsed_time.start()
 
         # Setup visual
         self.showFullScreen()
         self.__stop_button_wrapper.show()
 
-        self.__audio_recorder = AudioRecorder(self.__temp_audio_file_name)
+        self.__audio_recorder = AudioRecorder(self.__temp_audio_file_path)
         self.__screen_recorder = ScreenRecorder(
-            self.__capture_area, self.__temp_video_file_name, self.__fps
+            self.__capture_area, self.__temp_video_file_path, self.__fps
         )
 
         asyncio.run(self.__start_tasks())
@@ -228,24 +239,22 @@ class VideoRecorder(QWidget):
 
         # Merge audio and video
         print("Merging audio and video")
-        extension = "mp4" if self.__video_type == VideoType.MP4 else "avi"
-        output_file = f"output_with_audio.{extension}"
         actual_duration = self.__elapsed_time.elapsed() / 1000
         os_name = platform.system()
 
         if os_name == "Windows":
             process_video_and_audio_ffmpeg_raw_command(
-                self.__temp_video_file_name,
-                self.__temp_audio_file_name,
-                output_file,
+                self.__temp_video_file_path,
+                self.__temp_audio_file_path,
+                self.video_file_path,
                 self.__fps,
                 actual_duration,
             )
         elif os_name == "Linux":
             process_video_and_audio_ffmpeg_python(
-                self.__temp_video_file_name,
-                self.__temp_audio_file_name,
-                output_file,
+                self.__temp_video_file_path,
+                self.__temp_audio_file_path,
+                self.video_file_path,
                 self.__fps,
                 actual_duration,
             )

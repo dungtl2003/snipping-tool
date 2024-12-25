@@ -3,18 +3,19 @@ from PyQt6 import QtWidgets
 from PyQt6 import QtCore
 from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QIcon, QMouseEvent, QPixmap, QTransform
-from PyQt6.QtMultimedia import QMediaPlayer
+from PyQt6.QtMultimedia import QAudioDevice, QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
 import os
-from definitions import ICON_DIR
+from preload import ICON_DIR
 
 PLAY_ICON = os.path.join(ICON_DIR, "play.svg")
 PAUSE_ICON = os.path.join(ICON_DIR, "pause.svg")
@@ -85,8 +86,14 @@ class VideoPlayer(QWidget):
         super().__init__(parent)
 
         # Media Player
+        self.__audio_output = QAudioOutput()
+        self.__audio_output.setVolume(1)  # Set volume to 100%
         self.__media_player = QMediaPlayer(self)
+        self.__media_player.setAudioOutput(self.__audio_output)
         self.__video_widget = QVideoWidget(self)
+        self.__video_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
 
         # Controls
         self.__play_pause_button = QPushButton(QIcon(PLAY_ICON), "")
@@ -123,7 +130,7 @@ class VideoPlayer(QWidget):
 
         # Connect Media Player
         self.__media_player.setVideoOutput(self.__video_widget)
-        self.__media_player.setSource(QUrl.fromLocalFile("output_with_audio.mp4"))
+        self.__media_player.setSource(QUrl())
 
         # Connect Controls
         self.__play_pause_button.clicked.connect(self.__toggle_play_pause)
@@ -141,6 +148,14 @@ class VideoPlayer(QWidget):
             self.__update_slider_range_and_total_time
         )
         self.__media_player.mediaStatusChanged.connect(self.__on_media_status_changed)
+
+    def set_video(self, video_path: str):
+        self.__media_player.setSource(QUrl())  # Reset the media player
+        self.__media_player.setSource(QUrl.fromLocalFile(video_path))
+
+    def hide(self) -> None:
+        self.__media_player.setSource(QUrl())  # Reset the media player
+        return super().hide()
 
     def __on_media_status_changed(self, status: QMediaPlayer.MediaStatus):
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
@@ -199,15 +214,6 @@ class VideoPlayer(QWidget):
         minutes = seconds // 60
         seconds %= 60
         return f"{minutes:02}:{seconds:02}"
-
-    def is_in_bound(self, pos):
-        pass
-
-    def get_original_pixmap_coords_from_global(self, pos):
-        pass
-
-    def get_image(self):
-        pass
 
     def __toggle_play_pause(self):
         if self.__is_playing:

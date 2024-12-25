@@ -8,12 +8,17 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from components.copy_btn import CopyButton
-from components.image_viewer import ImageViewer
 from components.save import SaveButton
-from definitions import ICON_DIR
+from preload import ICON_DIR, APP_NAME
 import os
 
 from components.mouse_observer import MouseObserver
+from components.color_picker import ColorPicker
+from components.capture import NewCapture
+from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
+from components.mode_switching import ModeSwitching
+from components.video_recorder import VideoRecorder
+from components.viewer import Viewer, Mode
 
 APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 
@@ -23,14 +28,13 @@ class SnipperWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
-        self.setWindowTitle("Becap")
+        self.setWindowTitle(APP_NAME)
         # Not working
         icon = QIcon()
         icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
         self.setWindowIcon(icon)
 
-        self.viewer = ImageViewer()
-        # self.label = ImageLabel()
+        self.viewer = Viewer()
 
         self.setFixedSize(450, 100)
         self.is_expand_before = False
@@ -54,32 +58,42 @@ class SnipperWindow(QMainWindow):
             ),
         ]
 
-    def show_with_expand(self) -> None:
-        if not self.is_expand_before:
-            self.is_expand_before = True
-
-            self.__toolbar_top.show_center_section()
-            self.__toolbar_top.show_right_section()
-            self.__toolbar_bottom.show()
-
-            self.setMinimumSize(450, 500)
-            self.setMaximumSize(16777215, 16777215)
-            self.resize(450, 500)
-
-        self.show()
-
     def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
         if not self.is_expand_before:
             return
 
-        # Toggle middle section visibility based on window width
-        # must hide first to remove widget from layout
-        if self.width() < 600:  # change this number to your desired width
-            self.__toolbar_top.hide_center_section()
-            self.__toolbar_bottom.show()
-        else:
+        self.__set_dynamic_size()
+
+    def __set_dynamic_size(self) -> None:
+        if (
+            self.viewer.mode == Mode.IMAGE
+        ):  # only in image mode we need to toggle the middle section
+            # Toggle middle section visibility based on window width
+            # must hide first to remove widget from layout
+            self.__middle_toolbar.show()
+            if self.width() < 600:  # change this number to your desired width
+                self.__toolbar_top.hide_center_section()
+                self.__toolbar_bottom.show()
+            else:
+                self.__toolbar_bottom.hide()
+                self.__toolbar_top.show_center_section()
+        elif self.viewer.mode == Mode.VIDEO:
+            self.__color_picker.set_active(False)
             self.__toolbar_bottom.hide()
-            self.__toolbar_top.show_center_section()
+            self.__toolbar_top.hide_center_section()
+            self.__middle_toolbar.hide()
+
+    def __show_with_expand(self) -> None:
+        if not self.is_expand_before:
+            self.__toolbar_top.show_right_section()
+            self.is_expand_before = True
+            self.setMinimumSize(450, 500)
+            self.setMaximumSize(16777215, 16777215)
+            self.resize(450, 500)
+        else:
+            self.__set_dynamic_size()
+
+        self.show()
 
     def __set_layout(self) -> None:
         """
@@ -118,8 +132,6 @@ class SnipperWindow(QMainWindow):
             self.__toolbar_bottom, alignment=Qt.AlignmentFlag.AlignBottom
         )
 
-        # Window configuration
-
     def __init_functions(self) -> None:
         """
         Init the functions.
@@ -127,7 +139,7 @@ class SnipperWindow(QMainWindow):
         """
         self.__new_capture = NewCapture(self.__on_pre_capture, self.__on_post_capture)
         self.__mode_switching = ModeSwitching()
-        self.__color_picker = ColorPicker(self)
+        self.__color_picker = ColorPicker(self.viewer)
         self.__save = SaveButton()
         self.__copy = CopyButton()
 
@@ -145,20 +157,17 @@ class SnipperWindow(QMainWindow):
 
         capture_area, capture_pixmap = capture_result
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
+            self.viewer.set_mode(Mode.IMAGE)
             self.viewer.setPixmap(capture_pixmap)
-            self.show_with_expand()
-        else:
+            self.__show_with_expand()
+        elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
+            self.viewer.set_mode(Mode.VIDEO)
+
             self.video_recorder = VideoRecorder(
                 capture_area, self.__on_post_video_recording
             )
             self.video_recorder.start_recording()
 
     def __on_post_video_recording(self) -> None:
-        self.show()
-
-
-from components.color_picker import ColorPicker
-from components.capture import NewCapture
-from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
-from components.mode_switching import ModeSwitching
-from components.video_recorder import VideoRecorder
+        self.viewer.set_video(self.video_recorder.video_file_path)
+        self.__show_with_expand()

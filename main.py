@@ -6,10 +6,13 @@ from PyQt6.QtWidgets import (
     QApplication,
 )
 
-from components import SnipperWindow, MouseObserver
+from components.mouse_observer import MouseObserver
+from components.snipper_window import SnipperWindow
 from utils.styles import styles
-from definitions import ICON_DIR
+from preload import ICON_DIR
 from globals import kill_all_processes
+
+import preload as _  # noqa: F401
 
 APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 

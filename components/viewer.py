@@ -1,6 +1,9 @@
 from enum import Enum
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
+from components.image_viewer import ImageViewer
+from components.video_player import VideoPlayer
+
 
 class Mode(Enum):
     IMAGE = 1
@@ -14,7 +17,7 @@ class Viewer(QWidget):
 
         self.__image_viewer = ImageViewer()
         self.__video_player = VideoPlayer()
-        self.__mode: Mode = Mode.IMAGE
+        self.mode: Mode = Mode.IMAGE
 
         layout = QVBoxLayout()
         layout.addWidget(self.__image_viewer)
@@ -24,7 +27,7 @@ class Viewer(QWidget):
         self.set_mode(Mode.IMAGE)
 
     def set_mode(self, mode: Mode):
-        self.__mode = mode
+        self.mode = mode
 
         if mode == Mode.IMAGE:
             self.__image_viewer.show()
@@ -34,29 +37,31 @@ class Viewer(QWidget):
             self.__video_player.show()
 
     def is_in_bound(self, pos):
-        if self.__mode == Mode.IMAGE:
+        if self.mode == Mode.IMAGE:
             return self.__image_viewer.is_in_bound(pos)
-        elif self.__mode == Mode.VIDEO:
-            return self.__video_player.is_in_bound(pos)
+        elif self.mode == Mode.VIDEO:
+            raise Exception("Cannot check in bound in video mode")
 
     def get_original_pixmap_coords_from_global(self, pos):
-        if self.__mode == Mode.IMAGE:
+        if self.mode == Mode.IMAGE:
             return self.__image_viewer.get_original_pixmap_coords_from_global(pos)
-        elif self.__mode == Mode.VIDEO:
-            return self.__video_player.get_original_pixmap_coords_from_global(pos)
+        elif self.mode == Mode.VIDEO:
+            raise Exception("Cannot get original pixmap coords in video mode")
 
     def get_image(self):
-        if self.__mode == Mode.IMAGE:
+        if self.mode == Mode.IMAGE:
             return self.__image_viewer.get_image()
-        elif self.__mode == Mode.VIDEO:
-            return self.__video_player.get_image()
+        elif self.mode == Mode.VIDEO:
+            raise Exception("Cannot get image in video mode")
 
     def setPixmap(self, pixmap):
-        if self.__mode == Mode.IMAGE:
+        if self.mode == Mode.IMAGE:
             self.__image_viewer.setPixmap(pixmap)
-        elif self.__mode == Mode.VIDEO:
+        elif self.mode == Mode.VIDEO:
             raise Exception("Cannot set pixmap in video mode")
 
-
-from components.image_viewer import ImageViewer
-from components.video_player import VideoPlayer
+    def set_video(self, video_path: str):
+        if self.mode == Mode.VIDEO:
+            self.__video_player.set_video(video_path)
+        elif self.mode == Mode.IMAGE:
+            raise Exception("Cannot set video in image mode")

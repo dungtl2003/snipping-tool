@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Optional, Tuple, cast
+from typing import Callable, Optional, Tuple
 
 from PyQt6 import QtGui
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt
@@ -12,11 +12,10 @@ from PyQt6.QtGui import (
     QPixmap,
 )
 from PyQt6.QtWidgets import QApplication, QPushButton, QWidget
-from PyQt6.sip import voidptr
 
 import os
 from components import utils
-from definitions import ICON_DIR
+from preload import ICON_DIR
 
 PLUS_ICON = os.path.join(ICON_DIR, "plus.svg")
 

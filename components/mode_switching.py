@@ -3,7 +3,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 import os
-from definitions import ICON_DIR
+from preload import ICON_DIR
 from utils.styles import qpushbutton_style
 
 CAMERA_MODE_ICON = os.path.join(ICON_DIR, "camera-mode.svg")
@@ -73,4 +73,3 @@ class ModeSwitching(QWidget):
             self.__video_mode_action.setChecked(True)
 
         self.__mode = mode
-        print(f"Switched to {mode.name} mode.")

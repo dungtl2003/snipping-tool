@@ -3,16 +3,18 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton
 
 import os
-from definitions import ICON_DIR
+from preload import ICON_DIR
+
+from components.viewer import Viewer
 
 EYE_DROPPER_ICON = os.path.join(ICON_DIR, "eyedropper.svg")
 
 
 class ColorPicker(QPushButton):
-    def __init__(self, main_window: "SnipperWindow") -> None:
+    def __init__(self, viewer: Viewer) -> None:
         super().__init__(QIcon(EYE_DROPPER_ICON), "")
 
-        self.__main = main_window
+        self.__viewer = viewer
         self.__is_active = False
         self.__is_last_in_bound: bool | None = None
 
@@ -20,7 +22,7 @@ class ColorPicker(QPushButton):
         self.setCheckable(True)
 
         # Create a color preview square label
-        self.color_square = QLabel(self.__main.viewer)
+        self.color_square = QLabel(self.__viewer)
         self.color_square.setFixedSize(30, 30)
         self.color_square.setStyleSheet(
             "background-color: #FFFFFF; border: 1px solid black;"
@@ -35,6 +37,24 @@ class ColorPicker(QPushButton):
         """
         self.__is_active = not self.__is_active
         self.setChecked(self.__is_active)
+        self.color_square.hide()
+
+        if not self.__is_active:
+            QApplication.restoreOverrideCursor()
+        else:
+            QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
+
+    def set_active(self, active: bool) -> None:
+        """
+        Set the color picker active.
+        :param active: the active status
+        :type active: bool
+        :return: None
+        """
+        if self.__is_active == active:
+            return
+
+        self.toggle()
 
     def pick_color(self, a0: QMouseEvent) -> None:
         """
@@ -56,6 +76,8 @@ class ColorPicker(QPushButton):
         if clipboard is not None:
             clipboard.setText(hex_color)
 
+        self.toggle()
+
     def handle_mouse_movement(self, a0: QMouseEvent) -> None:
         """
         Handle the mouse movement.
@@ -70,7 +92,7 @@ class ColorPicker(QPushButton):
         mouse_glob_pos = a0.globalPosition()
 
         need_render = False
-        if not self.__main.viewer.is_in_bound(mouse_glob_pos):
+        if not self.__viewer.is_in_bound(mouse_glob_pos):
             if self.__is_last_in_bound is not False:
                 self.__is_last_in_bound = False
                 QApplication.restoreOverrideCursor()
@@ -93,9 +115,9 @@ class ColorPicker(QPushButton):
         self.color_square.setStyleSheet(
             f"background-color: {color.name()}; border: 1px solid black;"
         )
-        moust_rel_pos = self.__main.viewer.mapFromGlobal(mouse_glob_pos)
-        half_label_area_width = self.__main.viewer.width() / 2
-        half_label_area_height = self.__main.viewer.height() / 2
+        moust_rel_pos = self.__viewer.mapFromGlobal(mouse_glob_pos)
+        half_label_area_width = self.__viewer.width() / 2
+        half_label_area_height = self.__viewer.height() / 2
 
         offset = 15
         if moust_rel_pos.x() > half_label_area_width:
@@ -117,17 +139,12 @@ class ColorPicker(QPushButton):
 
     def __get_color_at_cursor(self, mouse_glob_pos: QPoint | QPointF) -> QColor | None:
         # Get the color at the cursor's position
-        point = self.__main.viewer.get_original_pixmap_coords_from_global(
-            mouse_glob_pos
-        )
+        point = self.__viewer.get_original_pixmap_coords_from_global(mouse_glob_pos)
         if point is None:
             return None
         (x, y) = point
 
-        image = self.__main.viewer.get_image()
+        image = self.__viewer.get_image()
         assert image is not None
 
         return image.pixelColor(int(x), int(y))
-
-
-from components.snipper_window import SnipperWindow
