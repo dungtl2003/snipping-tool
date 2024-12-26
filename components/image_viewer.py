@@ -44,15 +44,18 @@ class ImageViewer(QWidget):
         image_path = os.path.join(BECAP_PICTURE_PATH, f"becap_image_{saved_time}.png")
         image.save(image_path)
 
-    def copy_to_clipboard(self) -> None:
+    def copy_to_clipboard(self) -> QPixmap:
         """
         Copy the image to the clipboard.
         :return: None
         """
         image = self.get_image()
+        assert image is not None and not image.isNull()
         clipboard = QApplication.clipboard()
-        if image is not None and not image.isNull() and clipboard is not None:
+        if clipboard is not None:
             clipboard.setImage(image)
+
+        return QPixmap(image)
 
     def get_image(self) -> QImage | None:
         """

@@ -28,11 +28,11 @@ class NewCapture(QPushButton):
     ) -> None:
         super().__init__(QIcon(PLUS_ICON), " New")
 
-        self.clicked.connect(self.__capture)
+        self.clicked.connect(self.capture)
         self.__on_pre_capture = on_pre_capture
         self.__on_post_capture = on_post_capture
 
-    def __capture(self) -> None:
+    def capture(self) -> None:
         """
         Capture the screen.
         Note that when capturing, no other actions can be performed.

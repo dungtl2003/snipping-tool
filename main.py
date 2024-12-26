@@ -5,6 +5,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
 )
+from pynput import keyboard  # For global shortcuts
 
 from components.mouse_observer import MouseObserver
 from components.snipper_window import SnipperWindow
@@ -48,7 +49,12 @@ if __name__ == "__main__":
         mouse_observer = MouseObserver(window_handle)
         mouse_observer.subcribe(w.subscribers())
 
-        sys.exit(app.exec())
+        # Start global keyboard listener
+        with keyboard.GlobalHotKeys(
+            {"<ctrl>+<alt>+<up>": w.toggle_clipboard_manager},
+        ) as listener:
+            res = app.exec()
+            sys.exit(res)
     except Exception as e:
         print(f"Error on main process: {e}")
         kill_all_processes()

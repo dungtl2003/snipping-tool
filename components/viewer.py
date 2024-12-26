@@ -1,4 +1,5 @@
 from enum import Enum
+from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from components.image_viewer import ImageViewer
@@ -32,11 +33,13 @@ class Viewer(QWidget):
         elif self.mode == Mode.VIDEO:
             self.__video_player.save()
 
-    def copy_to_clipboard(self):
+    def copy_to_clipboard(self) -> QPixmap:
         if self.mode == Mode.IMAGE:
-            self.__image_viewer.copy_to_clipboard()
+            return self.__image_viewer.copy_to_clipboard()
         elif self.mode == Mode.VIDEO:
             raise Exception("Cannot copy to clipboard in video mode")
+
+        raise Exception("Unknown mode")
 
     def set_mode(self, mode: Mode):
         self.mode = mode

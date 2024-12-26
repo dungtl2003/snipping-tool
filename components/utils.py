@@ -183,3 +183,20 @@ def capture_mss_2(rect: QRect) -> MatLike | None:
 
         frame_bgr = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2BGR)
         return frame_bgr
+
+
+def get_focus_screen_geometry() -> QRect:
+    """
+    Get the geometry of the screen where the cursor is currently located. If the cursor is not on any screen, the
+    primary screen's geometry is returned as a fallback.
+
+    :return: The geometry of the screen where the cursor is located.
+    :rtype: QRect
+    """
+    cursor_pos = QCursor.pos()
+    screen = QApplication.screenAt(cursor_pos)
+    if not screen:
+        screen = QApplication.primaryScreen()  # Fallback to primary screen
+        assert screen is not None
+
+    return screen.geometry()

@@ -1,12 +1,13 @@
 import time
 from typing import Callable, List, Optional, Tuple
-from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtGui import QIcon, QPixmap, QResizeEvent
+from PyQt6.QtCore import QMetaObject, QRect, Qt
+from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
 from PyQt6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
     QWidget,
 )
+from components.clipboard_manager import ClipboardManager
 from components.copy_btn import CopyButton
 from components.save import SaveButton
 from preload import ICON_DIR, APP_NAME
@@ -35,12 +36,15 @@ class SnipperWindow(QMainWindow):
         self.setWindowIcon(icon)
 
         self.viewer = Viewer()
+        self.__clipboard_manager = ClipboardManager()
 
         self.setFixedSize(450, 100)
         self.is_expand_before = False
 
         self.__init_functions()
         self.__set_layout()
+
+        self.__setup_shortcut()
 
     def subscribers(
         self,
@@ -147,7 +151,8 @@ class SnipperWindow(QMainWindow):
         self.viewer.save()
 
     def __on_copy(self) -> None:
-        self.viewer.copy_to_clipboard()
+        img = self.viewer.copy_to_clipboard()
+        self.__clipboard_manager.add_item(img)
 
     def __on_pre_capture(self) -> None:
         self.hide()
@@ -177,3 +182,13 @@ class SnipperWindow(QMainWindow):
     def __on_post_video_recording(self) -> None:
         self.viewer.set_video(self.video_recorder.video_file_path)
         self.__show_with_expand()
+
+    def __setup_shortcut(self):
+        shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        shortcut.activated.connect(self.__new_capture.capture)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        shortcut.activated.connect(self.close)
+
+    def toggle_clipboard_manager(self):
+        QMetaObject.invokeMethod(self.__clipboard_manager, "toggle")
