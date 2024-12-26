@@ -1,14 +1,19 @@
+import time
 from os import error
 from typing import Callable, Optional, Tuple
 from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtGui import QImage, QPixmap, QResizeEvent, QWheelEvent
 from PyQt6.QtWidgets import (
+    QApplication,
     QFrame,
     QLabel,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
+from ffmpeg.nodes import os
+
+from preload import BECAP_PICTURE_PATH
 
 
 class ImageViewer(QWidget):
@@ -26,6 +31,28 @@ class ImageViewer(QWidget):
 
     def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
         self.label.update_image_display(None)
+
+    def save(self) -> None:
+        """
+        Save the image.
+        :return: None
+        """
+        image = self.get_image()
+        assert image is not None and not image.isNull()
+
+        saved_time = time.strftime("%Y%m%d%H%M%S")
+        image_path = os.path.join(BECAP_PICTURE_PATH, f"becap_image_{saved_time}.png")
+        image.save(image_path)
+
+    def copy_to_clipboard(self) -> None:
+        """
+        Copy the image to the clipboard.
+        :return: None
+        """
+        image = self.get_image()
+        clipboard = QApplication.clipboard()
+        if image is not None and not image.isNull() and clipboard is not None:
+            clipboard.setImage(image)
 
     def get_image(self) -> QImage | None:
         """

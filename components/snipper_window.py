@@ -140,8 +140,14 @@ class SnipperWindow(QMainWindow):
         self.__new_capture = NewCapture(self.__on_pre_capture, self.__on_post_capture)
         self.__mode_switching = ModeSwitching()
         self.__color_picker = ColorPicker(self.viewer)
-        self.__save = SaveButton()
-        self.__copy = CopyButton()
+        self.__save = SaveButton(self.__on_save)
+        self.__copy = CopyButton(self.__on_copy)
+
+    def __on_save(self) -> None:
+        self.viewer.save()
+
+    def __on_copy(self) -> None:
+        self.viewer.copy_to_clipboard()
 
     def __on_pre_capture(self) -> None:
         self.hide()

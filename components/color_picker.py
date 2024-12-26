@@ -13,6 +13,7 @@ EYE_DROPPER_ICON = os.path.join(ICON_DIR, "eyedropper.svg")
 class ColorPicker(QPushButton):
     def __init__(self, viewer: Viewer) -> None:
         super().__init__(QIcon(EYE_DROPPER_ICON), "")
+        self.setToolTip("Color picker")
 
         self.__viewer = viewer
         self.__is_active = False

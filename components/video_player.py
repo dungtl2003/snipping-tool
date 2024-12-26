@@ -1,9 +1,10 @@
+import time
 from typing import Optional
 from PyQt6 import QtWidgets
 from PyQt6 import QtCore
 from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QIcon, QMouseEvent, QPixmap, QTransform
-from PyQt6.QtMultimedia import QAudioDevice, QAudioOutput, QMediaPlayer
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtWidgets import (
     QHBoxLayout,
@@ -15,7 +16,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 import os
-from preload import ICON_DIR
+from preload import ICON_DIR, BECAP_VIDEO_PATH
+import shutil
 
 PLAY_ICON = os.path.join(ICON_DIR, "play.svg")
 PAUSE_ICON = os.path.join(ICON_DIR, "pause.svg")
@@ -94,6 +96,7 @@ class VideoPlayer(QWidget):
         self.__video_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
+        self.__video_path = ""
 
         # Controls
         self.__play_pause_button = QPushButton(QIcon(PLAY_ICON), "")
@@ -149,9 +152,20 @@ class VideoPlayer(QWidget):
         )
         self.__media_player.mediaStatusChanged.connect(self.__on_media_status_changed)
 
+    def save(self):
+        """
+        Save the video.
+        :return: None
+        """
+
+        saved_time = time.strftime("%Y%m%d%H%M%S")
+        video_path = os.path.join(BECAP_VIDEO_PATH, f"becap_video_{saved_time}.mp4")
+        shutil.move(self.__video_path, video_path)
+
     def set_video(self, video_path: str):
         self.__media_player.setSource(QUrl())  # Reset the media player
         self.__media_player.setSource(QUrl.fromLocalFile(video_path))
+        self.__video_path = video_path
 
     def hide(self) -> None:
         self.__media_player.setSource(QUrl())  # Reset the media player

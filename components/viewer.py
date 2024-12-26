@@ -26,6 +26,18 @@ class Viewer(QWidget):
 
         self.set_mode(Mode.IMAGE)
 
+    def save(self):
+        if self.mode == Mode.IMAGE:
+            self.__image_viewer.save()
+        elif self.mode == Mode.VIDEO:
+            self.__video_player.save()
+
+    def copy_to_clipboard(self):
+        if self.mode == Mode.IMAGE:
+            self.__image_viewer.copy_to_clipboard()
+        elif self.mode == Mode.VIDEO:
+            raise Exception("Cannot copy to clipboard in video mode")
+
     def set_mode(self, mode: Mode):
         self.mode = mode
 
