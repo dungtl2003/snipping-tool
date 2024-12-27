@@ -34,28 +34,26 @@ class ModeSwitching(QWidget):
         layout.setSpacing(0)
         self.show()
 
-        self.__camera_mode_action = QPushButton(QIcon(CAMERA_MODE_ICON), "")
-        self.__camera_mode_action.setToolTip("Camera mode")
-        self.__camera_mode_action.setStyleSheet(btn_style)
-        self.__camera_mode_action.setCheckable(True)
-        self.__camera_mode_action.setChecked(True)
+        self.camera_mode_btn = QPushButton(QIcon(CAMERA_MODE_ICON), "")
+        self.camera_mode_btn.setToolTip("Camera mode")
+        self.camera_mode_btn.setStyleSheet(btn_style)
+        self.camera_mode_btn.setCheckable(True)
+        self.camera_mode_btn.setChecked(True)
 
-        self.__video_mode_action = QPushButton(QIcon(VIDEO_MODE_ICON), "")
-        self.__video_mode_action.setToolTip("Video mode")
-        self.__video_mode_action.setStyleSheet(btn_style)
-        self.__video_mode_action.setCheckable(True)
+        self.video_mode_btn = QPushButton(QIcon(VIDEO_MODE_ICON), "")
+        self.video_mode_btn.setToolTip("Video mode")
+        self.video_mode_btn.setStyleSheet(btn_style)
+        self.video_mode_btn.setCheckable(True)
 
         self.__mode = self.Mode.CAMERA
 
-        self.__camera_mode_action.clicked.connect(
+        self.camera_mode_btn.clicked.connect(
             lambda: self.__switch_mode(self.Mode.CAMERA)
         )
-        self.__video_mode_action.clicked.connect(
-            lambda: self.__switch_mode(self.Mode.VIDEO)
-        )
+        self.video_mode_btn.clicked.connect(lambda: self.__switch_mode(self.Mode.VIDEO))
 
-        layout.addWidget(self.__camera_mode_action)
-        layout.addWidget(self.__video_mode_action)
+        layout.addWidget(self.camera_mode_btn)
+        layout.addWidget(self.video_mode_btn)
 
         self.setLayout(layout)
 
@@ -66,10 +64,10 @@ class ModeSwitching(QWidget):
     def __switch_mode(self, mode: Mode) -> None:
         """Handle mode switching logic."""
         if mode == self.Mode.CAMERA:
-            self.__camera_mode_action.setChecked(True)
-            self.__video_mode_action.setChecked(False)
+            self.camera_mode_btn.setChecked(True)
+            self.video_mode_btn.setChecked(False)
         else:
-            self.__camera_mode_action.setChecked(False)
-            self.__video_mode_action.setChecked(True)
+            self.camera_mode_btn.setChecked(False)
+            self.video_mode_btn.setChecked(True)
 
         self.__mode = mode

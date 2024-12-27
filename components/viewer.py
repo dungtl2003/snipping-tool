@@ -33,11 +33,11 @@ class Viewer(QWidget):
         elif self.mode == Mode.VIDEO:
             self.__video_player.save()
 
-    def copy_to_clipboard(self) -> QPixmap:
+    def get_pixmap(self) -> QPixmap | None:
         if self.mode == Mode.IMAGE:
-            return self.__image_viewer.copy_to_clipboard()
+            return self.__image_viewer.get_original_pixmap()
         elif self.mode == Mode.VIDEO:
-            raise Exception("Cannot copy to clipboard in video mode")
+            raise Exception("Cannot get pixmap in video mode")
 
         raise Exception("Unknown mode")
 
@@ -69,9 +69,9 @@ class Viewer(QWidget):
         elif self.mode == Mode.VIDEO:
             raise Exception("Cannot get image in video mode")
 
-    def setPixmap(self, pixmap):
+    def set_pixmap(self, pixmap):
         if self.mode == Mode.IMAGE:
-            self.__image_viewer.setPixmap(pixmap)
+            self.__image_viewer.set_pixmap(pixmap)
         elif self.mode == Mode.VIDEO:
             raise Exception("Cannot set pixmap in video mode")
 

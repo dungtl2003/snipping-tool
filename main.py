@@ -1,17 +1,11 @@
 import sys
 import os
+import multiprocessing
 
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import (
-    QApplication,
-)
-from pynput import keyboard  # For global shortcuts
-
-from components.mouse_observer import MouseObserver
-from components.snipper_window import SnipperWindow
-from utils.styles import styles
+from components.clipboard_manager import run_clipboard_manager
+from components.snipper_window import run_snipper_window
 from preload import ICON_DIR
-from globals import kill_all_processes
+from globals import kill_all_processes, processes
 
 import preload as _  # noqa: F401
 
@@ -34,27 +28,24 @@ if __name__ == "__main__":
     sys.excepthook = error_handler  # redirect std error
 
     try:
-        app = QApplication(sys.argv)
-        icon = QIcon(APP_ICON)
-        app.setStyleSheet(styles)
-        w = SnipperWindow()
-        w.show()
+        snipper_window_process = multiprocessing.Process(target=run_snipper_window)
+        clipboard_manager_process = multiprocessing.Process(
+            target=run_clipboard_manager
+        )
 
-        window = w.window()
-        assert window is not None
+        processes.append(clipboard_manager_process)
+        processes.append(snipper_window_process)
 
-        window_handle = window.windowHandle()
-        assert window_handle is not None
+        print("Starting snipper window process")
+        snipper_window_process.start()
+        print("Starting clipboard manager process")
+        clipboard_manager_process.start()
 
-        mouse_observer = MouseObserver(window_handle)
-        mouse_observer.subcribe(w.subscribers())
+        snipper_window_process.join()
+        processes.remove(snipper_window_process)
 
-        # Start global keyboard listener
-        with keyboard.GlobalHotKeys(
-            {"<ctrl>+<alt>+<up>": w.toggle_clipboard_manager},
-        ) as listener:
-            res = app.exec()
-            sys.exit(res)
+        print("Snipper window process has ended. Killing all processes")
+        kill_all_processes()
     except Exception as e:
         print(f"Error on main process: {e}")
         kill_all_processes()

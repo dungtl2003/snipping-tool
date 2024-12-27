@@ -23,6 +23,12 @@ class SaveButton(QPushButton):
         self.__animate_button()
         self.__on_save_event()
 
+    def enable(self):
+        self.setEnabled(True)
+
+    def disable(self):
+        self.setEnabled(False)
+
     def __animate_button(self):
         # Change to "tick" icon
         self.setIcon(QIcon(TICK_ICON))

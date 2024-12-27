@@ -64,11 +64,11 @@ class TopToolBar(BaseToolBar):
     ) -> None:
         super().__init__()
 
-        self.__new_capture = new_capture
+        self.__new_capture_btn = new_capture
         self.__mode_switching = mode_switching
         self.__middle_toolbar = middle_toolbar
-        self.__save = save
-        self.__copy = copy
+        self.__save_btn = save
+        self.__copy_btn = copy
 
         self.__spacer = QWidget()
         self.__spacer.setSizePolicy(
@@ -142,7 +142,7 @@ class TopToolBar(BaseToolBar):
         self.__right_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
 
         # Save
-        self.__right_toolbar.addWidget(self.__save)
+        self.__right_toolbar.addWidget(self.__save_btn)
 
         # Space
         space = QWidget()
@@ -150,7 +150,7 @@ class TopToolBar(BaseToolBar):
         self.__right_toolbar.addWidget(space)
 
         # Copy
-        self.__right_toolbar.addWidget(self.__copy)
+        self.__right_toolbar.addWidget(self.__copy_btn)
 
         # Space
         space = QWidget()
@@ -185,7 +185,7 @@ class TopToolBar(BaseToolBar):
         self.__left_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
 
         # New
-        self.__left_toolbar.addWidget(self.__new_capture)
+        self.__left_toolbar.addWidget(self.__new_capture_btn)
 
         # Space
         space = QWidget()

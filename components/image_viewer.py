@@ -4,7 +4,6 @@ from typing import Callable, Optional, Tuple
 from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtGui import QImage, QPixmap, QResizeEvent, QWheelEvent
 from PyQt6.QtWidgets import (
-    QApplication,
     QFrame,
     QLabel,
     QScrollArea,
@@ -49,13 +48,17 @@ class ImageViewer(QWidget):
         Copy the image to the clipboard.
         :return: None
         """
-        image = self.get_image()
-        assert image is not None and not image.isNull()
-        clipboard = QApplication.clipboard()
-        if clipboard is not None:
-            clipboard.setImage(image)
+        pixmap = self.label.pixmap()
 
-        return QPixmap(image)
+        return pixmap
+
+    def get_original_pixmap(self) -> QPixmap | None:
+        """
+        Get the pixmap.
+        :return: the pixmap
+        :rtype: QPixmap
+        """
+        return self.label.get_original_pixmap()
 
     def get_image(self) -> QImage | None:
         """
@@ -92,7 +95,7 @@ class ImageViewer(QWidget):
         """
         return self.label.get_original_pixmap_coords_from_global(point)
 
-    def setPixmap(self, a0: QPixmap) -> None:
+    def set_pixmap(self, a0: QPixmap) -> None:
         """
         Set the pixmap to the label.
         :param a0: the pixmap
@@ -152,7 +155,6 @@ class ImageLabel(QLabel):
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.__zoom_factor = 1.0  # 100%
-        # self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMouseTracking(True)
         self.__original_pixmap = None
         self.__parent = parent
@@ -166,6 +168,14 @@ class ImageLabel(QLabel):
         return (
             None if self.__original_pixmap is None else self.__original_pixmap.toImage()
         )
+
+    def get_original_pixmap(self) -> QPixmap | None:
+        """
+        Get the pixmap.
+        :return: the pixmap
+        :rtype: QPixmap
+        """
+        return self.__original_pixmap
 
     def is_in_bound(self, glob_point: QPointF) -> bool:
         if self.__original_pixmap is None:

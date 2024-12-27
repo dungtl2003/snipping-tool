@@ -1,16 +1,16 @@
 import time
 from typing import Callable, List, Optional, Tuple
-from PyQt6.QtCore import QMetaObject, QRect, Qt
+from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
 from PyQt6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QVBoxLayout,
     QWidget,
 )
-from components.clipboard_manager import ClipboardManager
 from components.copy_btn import CopyButton
 from components.save import SaveButton
-from preload import ICON_DIR, APP_NAME
+from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
 import os
 
 from components.mouse_observer import MouseObserver
@@ -20,6 +20,7 @@ from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
 from components.mode_switching import ModeSwitching
 from components.video_recorder import VideoRecorder
 from components.viewer import Viewer, Mode
+from utils.styles import styles
 
 APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 
@@ -36,7 +37,6 @@ class SnipperWindow(QMainWindow):
         self.setWindowIcon(icon)
 
         self.viewer = Viewer()
-        self.__clipboard_manager = ClipboardManager()
 
         self.setFixedSize(450, 100)
         self.is_expand_before = False
@@ -45,6 +45,11 @@ class SnipperWindow(QMainWindow):
         self.__set_layout()
 
         self.__setup_shortcut()
+
+        self.__copy_btn.disable()
+        self.__save_btn.disable()
+
+        self.__last_copy_pixmap: QPixmap | None = None
 
     def subscribers(
         self,
@@ -55,9 +60,9 @@ class SnipperWindow(QMainWindow):
         :rtype: List[Tuple[Callable[..., None], MouseObserver.SubscribeEvent]]
         """
         return [
-            (self.__color_picker.pick_color, MouseObserver.SubscribeEvent.PRESSED),
+            (self.__color_picker_btn.pick_color, MouseObserver.SubscribeEvent.PRESSED),
             (
-                self.__color_picker.handle_mouse_movement,
+                self.__color_picker_btn.handle_mouse_movement,
                 MouseObserver.SubscribeEvent.MOVED,
             ),
         ]
@@ -82,13 +87,16 @@ class SnipperWindow(QMainWindow):
                 self.__toolbar_bottom.hide()
                 self.__toolbar_top.show_center_section()
         elif self.viewer.mode == Mode.VIDEO:
-            self.__color_picker.set_active(False)
+            self.__color_picker_btn.set_active(False)
             self.__toolbar_bottom.hide()
             self.__toolbar_top.hide_center_section()
             self.__middle_toolbar.hide()
 
     def __show_with_expand(self) -> None:
         if not self.is_expand_before:
+            self.__copy_btn.enable()
+            self.__save_btn.enable()
+
             self.__toolbar_top.show_right_section()
             self.is_expand_before = True
             self.setMinimumSize(450, 500)
@@ -96,6 +104,11 @@ class SnipperWindow(QMainWindow):
             self.resize(450, 500)
         else:
             self.__set_dynamic_size()
+
+        if self.viewer.mode == Mode.VIDEO:
+            self.__copy_btn.disable()
+        elif self.viewer.mode == Mode.IMAGE:
+            self.__copy_btn.enable()
 
         self.show()
 
@@ -112,15 +125,15 @@ class SnipperWindow(QMainWindow):
         self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.__middle_toolbar = MiddleToolBar(self.__color_picker)
+        self.__middle_toolbar = MiddleToolBar(self.__color_picker_btn)
 
         # Toolbar (at the top)
         self.__toolbar_top = TopToolBar(
-            self.__new_capture,
+            self.__new_capture_btn,
             self.__mode_switching,
             self.__middle_toolbar,
-            self.__save,
-            self.__copy,
+            self.__save_btn,
+            self.__copy_btn,
         )
         # Main section
         self.viewer.setVisible(True)
@@ -141,18 +154,44 @@ class SnipperWindow(QMainWindow):
         Init the functions.
         :return: None
         """
-        self.__new_capture = NewCapture(self.__on_pre_capture, self.__on_post_capture)
+        self.__new_capture_btn = NewCapture(
+            self.__on_pre_capture, self.__on_post_capture
+        )
         self.__mode_switching = ModeSwitching()
-        self.__color_picker = ColorPicker(self.viewer)
-        self.__save = SaveButton(self.__on_save)
-        self.__copy = CopyButton(self.__on_copy)
+        self.__color_picker_btn = ColorPicker(self.viewer)
+        self.__save_btn = SaveButton(self.__on_save)
+        self.__copy_btn = CopyButton(self.__on_copy)
 
     def __on_save(self) -> None:
+        if not self.__save_btn.isEnabled():
+            return
+
         self.viewer.save()
 
     def __on_copy(self) -> None:
-        img = self.viewer.copy_to_clipboard()
-        self.__clipboard_manager.add_item(img)
+        if not self.__copy_btn.isEnabled():
+            return
+
+        pixmap = self.viewer.get_pixmap()
+        if pixmap is None:
+            return
+
+        image = pixmap.toImage()
+        assert image is not None and not image.isNull()
+
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setImage(image)
+
+        # avoid saving the same image to clipboard db multiple times
+        if self.__last_copy_pixmap is None or pixmap != self.__last_copy_pixmap:
+            saved_time_str = time.strftime("%Y%m%d%H%M%S")
+            new_file_path = os.path.join(
+                BECAP_CLIPBOARD_MANAGER_PATH, f"becap_clipboard_{saved_time_str}.png"
+            )
+
+            image.save(new_file_path, "PNG")
+            self.__last_copy_pixmap = pixmap
 
     def __on_pre_capture(self) -> None:
         self.hide()
@@ -169,7 +208,7 @@ class SnipperWindow(QMainWindow):
         capture_area, capture_pixmap = capture_result
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
             self.viewer.set_mode(Mode.IMAGE)
-            self.viewer.setPixmap(capture_pixmap)
+            self.viewer.set_pixmap(capture_pixmap)
             self.__show_with_expand()
         elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
             self.viewer.set_mode(Mode.VIDEO)
@@ -185,10 +224,43 @@ class SnipperWindow(QMainWindow):
 
     def __setup_shortcut(self):
         shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
-        shortcut.activated.connect(self.__new_capture.capture)
+        shortcut.activated.connect(self.__new_capture_btn.capture)
 
         shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
         shortcut.activated.connect(self.close)
 
-    def toggle_clipboard_manager(self):
-        QMetaObject.invokeMethod(self.__clipboard_manager, "toggle")
+        shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        shortcut.activated.connect(self.__save_btn.click)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        shortcut.activated.connect(self.__copy_btn.click)
+
+        shortcut = QShortcut(QKeySequence("Tab"), self)
+        shortcut.activated.connect(self.__on_switch_mode_shortcut)
+
+    def __on_switch_mode_shortcut(self) -> None:
+        if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
+            self.__mode_switching.video_mode_btn.click()
+        elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
+            self.__mode_switching.camera_mode_btn.click()
+
+
+def run_snipper_window():
+    import sys
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication(sys.argv)
+    app.setStyleSheet(styles)
+    w = SnipperWindow()
+    w.show()
+
+    window = w.window()
+    assert window is not None
+
+    window_handle = window.windowHandle()
+    assert window_handle is not None
+
+    mouse_observer = MouseObserver(window_handle)
+    mouse_observer.subcribe(w.subscribers())
+
+    app.exec()

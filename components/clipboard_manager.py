@@ -1,9 +1,16 @@
 import os
-import time
 from typing import Callable, Optional
 
-from PyQt6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRect, Qt, pyqtSlot
-from PyQt6.QtGui import QCursor, QEnterEvent, QMouseEvent, QPixmap
+from PyQt6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QMetaObject,
+    QPropertyAnimation,
+    QRect,
+    Qt,
+    pyqtSlot,
+)
+from PyQt6.QtGui import QEnterEvent, QFont, QMouseEvent, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -13,6 +20,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from pynput import keyboard
 
 from components import utils
 from preload import BECAP_CLIPBOARD_MANAGER_PATH
@@ -38,7 +46,6 @@ class AnimatedLabel(QLabel):
         super().__init__()
         self.setFixedSize(w, h)
         self.setPixmap(item.image.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
-        self.setToolTip(item.file_path)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet(
             """
@@ -122,8 +129,10 @@ class ClipboardManager(QWidget):
 
         self.__max_capacity = max_capacity
         self.__items: list[ClipboardItem] = []
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.WindowType.Tool)
+        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # Main Layout
         main_layout = QVBoxLayout(self)
@@ -160,31 +169,25 @@ class ClipboardManager(QWidget):
         self.__is_animating = False
         self.__load_items()
 
-    def add_item(self, image: QPixmap):
-        if len(self.__items) >= self.__max_capacity:
-            item = self.__items.pop()
+    def __load_no_items_label(self):
+        # Create the label
+        message_label = QLabel("No items in clipboard manager")
+        message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        saved_time_str = time.strftime("%Y%m%d%H%M%S")
-        new_file_path = os.path.join(
-            BECAP_CLIPBOARD_MANAGER_PATH, f"becap_clipboard_{saved_time_str}.png"
-        )
-        item = ClipboardItem(image, new_file_path, time.time())
-        item.image.save(new_file_path)
+        # Update font size and style
+        font = QFont("Arial", 16)  # Use your preferred font and size
+        font.setBold(True)
+        message_label.setFont(font)
+        self.content_layout.addWidget(message_label)
 
-        self.__items.insert(0, item)
-        self.content_layout.insertWidget(
-            0, AnimatedLabel(item, self.__lw, self.__lh, self.__on_label_selected)
-        )
-
-        max_width = self.__calculate_max_width()
-        new_width = self.width() + self.__lw + 10
-        self.setFixedWidth(min(new_width, max_width))
+        self.setFixedWidth(message_label.width())
 
     def __load_items(self):
         self.__items = []
 
         if not os.path.exists(BECAP_CLIPBOARD_MANAGER_PATH):
             print("Missing clipboard manager directory")
+            self.__load_no_items_label()
             return
 
         for file in os.listdir(BECAP_CLIPBOARD_MANAGER_PATH):
@@ -204,11 +207,22 @@ class ClipboardManager(QWidget):
             os.remove(item.file_path)
 
         total_width = 20  # Padding
+        for i in range(self.content_layout.count()):
+            item = self.content_layout.itemAt(i)
+            if item is not None:
+                item = item.widget()
+                if item:
+                    item.deleteLater()
+
         for item in self.__items:
             total_width += self.__lw + 10
             self.content_layout.addWidget(
                 AnimatedLabel(item, self.__lw, self.__lh, self.__on_label_selected)
             )
+
+        if len(self.__items) == 0:
+            self.__load_no_items_label()
+            return
 
         max_width = self.__calculate_max_width()
         self.setFixedWidth(min(total_width, max_width))
@@ -218,14 +232,15 @@ class ClipboardManager(QWidget):
         if self.__is_active:
             self.__hide_with_animation()
         else:
-            if not self.__items:
-                return
             self.__show_with_animation()
 
     def __show_with_animation(self):
         # Determine the active screen
         if self.__is_animating:
             return
+
+        # Maximum of 20 items, so this is ok to call every time
+        self.__load_items()
 
         self.__lock_animation()
         self.__is_active = True
@@ -284,12 +299,10 @@ class ClipboardManager(QWidget):
         self.__is_animating = True
         for i in range(self.content_layout.count()):
             widget = self.content_layout.itemAt(i)
-            assert widget is not None
-            widget = widget.widget()
-            assert isinstance(widget, AnimatedLabel)
-
-            if widget:
-                widget.lock_animation()
+            if widget is not None:
+                widget = widget.widget()
+                if isinstance(widget, AnimatedLabel):
+                    widget.lock_animation()
 
     def __unlock_animation(self):
         self.__is_animating = False
@@ -297,9 +310,7 @@ class ClipboardManager(QWidget):
             widget = self.content_layout.itemAt(i)
             assert widget is not None
             widget = widget.widget()
-            assert isinstance(widget, AnimatedLabel)
-
-            if widget:
+            if widget is not None and isinstance(widget, AnimatedLabel):
                 widget.unlock_animation()
 
     def __on_label_selected(self, item: ClipboardItem):
@@ -312,3 +323,19 @@ class ClipboardManager(QWidget):
 
         clipboard.setPixmap(item.image)
         self.__hide_with_animation()
+
+
+def run_clipboard_manager():
+    app = QApplication([])
+    clipboard_manager = ClipboardManager()
+
+    def on_activate():
+        QMetaObject.invokeMethod(
+            clipboard_manager, "toggle", Qt.ConnectionType.QueuedConnection
+        )
+
+    # Start global keyboard listener
+    with keyboard.GlobalHotKeys(
+        {"<ctrl>+<alt>+<up>": on_activate},
+    ):
+        app.exec()
