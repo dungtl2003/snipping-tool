@@ -1,6 +1,7 @@
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QToolBar, QWidget
 
+from components.blur import Blur
 from utils.styles import qtoolbar_style
 from components.mode_switching import ModeSwitching
 from components.capture import NewCapture
@@ -26,6 +27,7 @@ class MiddleToolBar(BaseToolBar):
     def __init__(
         self,
         eye_dropper: ColorPicker,
+        blur_btn: Blur,
     ) -> None:
         super().__init__()
 
@@ -45,11 +47,34 @@ class MiddleToolBar(BaseToolBar):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(left_spacer)
         layout.addWidget(eye_dropper)
+        layout.addWidget(blur_btn)
         layout.addWidget(right_spacer)
 
         widget = QWidget()
         widget.setLayout(layout)
         self.addWidget(widget)
+
+        self.__eye_dropper = eye_dropper
+        self.__blur_btn = blur_btn
+
+        self.__eye_dropper.toggled.connect(self.__on_eye_dropper_toggled)
+        self.__blur_btn.toggled.connect(self.__on_blur_toggled)
+
+    def __on_eye_dropper_toggled(self) -> None:
+        """
+        Handle the eye dropper toggled.
+        :return: None
+        """
+        if self.__eye_dropper.isChecked():
+            self.__blur_btn.deactivate()
+
+    def __on_blur_toggled(self) -> None:
+        """
+        Handle the blur toggled.
+        :return: None
+        """
+        if self.__blur_btn.isChecked():
+            self.__eye_dropper.deactivate()
 
 
 class TopToolBar(BaseToolBar):

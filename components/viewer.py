@@ -1,5 +1,6 @@
 from enum import Enum
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from components.image_viewer import ImageViewer
@@ -51,11 +52,26 @@ class Viewer(QWidget):
             self.__image_viewer.hide()
             self.__video_player.show()
 
-    def is_in_bound(self, pos):
+    def is_in_bound(self, pos: QPointF) -> bool:
         if self.mode == Mode.IMAGE:
             return self.__image_viewer.is_in_bound(pos)
         elif self.mode == Mode.VIDEO:
             raise Exception("Cannot check in bound in video mode")
+
+        raise Exception("Unknown mode")
+
+    def is_in_viewer_bound(self, pos: QPointF) -> bool:
+        local_pos = self.mapFromGlobal(pos)
+
+        if (
+            local_pos.x() < 0
+            or local_pos.y() < 0
+            or local_pos.x() > self.width()
+            or local_pos.y() > self.height()
+        ):
+            return False
+
+        return True
 
     def get_original_pixmap_coords_from_global(self, pos):
         if self.mode == Mode.IMAGE:

@@ -16,7 +16,7 @@ def set_normal_cursor() -> None:
 
 
 def set_cross_cursor(
-    size: int = 32, color: QColor | Qt.GlobalColor = Qt.GlobalColor.white
+    size: int = 20, color: QColor | Qt.GlobalColor = Qt.GlobalColor.white
 ) -> None:
     """Set the cursor to white cross."""
     pixmap = QPixmap(QSize(size, size))

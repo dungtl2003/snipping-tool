@@ -41,22 +41,15 @@ class ColorPicker(QPushButton):
         self.setChecked(self.__is_active)
         self.color_square.hide()
 
-        if not self.__is_active:
-            set_normal_cursor()
-        else:
-            set_cross_cursor(20, Qt.GlobalColor.gray)
-
-    def set_active(self, active: bool) -> None:
+    def deactivate(self) -> None:
         """
-        Set the color picker active.
-        :param active: the active status
-        :type active: bool
+        Deactivate the color picker.
         :return: None
         """
-        if self.__is_active == active:
-            return
-
-        self.toggle()
+        self.__is_active = False
+        self.setChecked(False)
+        self.color_square.hide()
+        set_normal_cursor()
 
     def pick_color(self, a0: QMouseEvent) -> None:
         """
@@ -78,7 +71,7 @@ class ColorPicker(QPushButton):
         if clipboard is not None:
             clipboard.setText(hex_color)
 
-        self.toggle()
+        self.deactivate()
 
     def handle_mouse_movement(self, a0: QMouseEvent) -> None:
         """

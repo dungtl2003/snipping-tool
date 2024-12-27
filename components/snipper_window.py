@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from components.blur import Blur
 from components.copy_btn import CopyButton
 from components.save import SaveButton
 from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
@@ -25,8 +26,45 @@ from utils.styles import styles
 APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 
 
-class SnipperWindow(QMainWindow):
+class PixmapHistory:
+    def __init__(self) -> None:
+        self.__history: List[QPixmap] = []
+        self.__current_index = -1
 
+    def add(self, pixmap: QPixmap) -> None:
+        self.__history = self.__history[: self.__current_index + 1]
+        self.__history.append(pixmap)
+        self.__current_index += 1
+
+    def undo(self) -> QPixmap | None:
+        if self.__current_index <= 0:
+            return None
+
+        self.__current_index -= 1
+        return self.__history[self.__current_index]
+
+    def redo(self) -> QPixmap | None:
+        if self.__current_index >= len(self.__history) - 1:
+            return None
+
+        self.__current_index += 1
+        return self.__history[self.__current_index]
+
+    def clear(self) -> None:
+        self.__history.clear()
+        self.__current_index = -1
+
+    def get_current_pixmap(self) -> QPixmap | None:
+        if self.__current_index < 0 or self.__current_index >= len(self.__history):
+            return None
+
+        return self.__history[self.__current_index]
+
+    def __len__(self) -> int:
+        return len(self.__history)
+
+
+class SnipperWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
@@ -50,6 +88,8 @@ class SnipperWindow(QMainWindow):
         self.__save_btn.disable()
 
         self.__last_copy_pixmap: QPixmap | None = None
+        self.__pixmap_history: PixmapHistory = PixmapHistory()
+        self.__current_mode = ModeSwitching.Mode.CAMERA
 
     def subscribers(
         self,
@@ -64,6 +104,18 @@ class SnipperWindow(QMainWindow):
             (
                 self.__color_picker_btn.handle_mouse_movement,
                 MouseObserver.SubscribeEvent.MOVED,
+            ),
+            (
+                self.__blur_btn.handle_mouse_movement,
+                MouseObserver.SubscribeEvent.MOVED,
+            ),
+            (
+                self.__blur_btn.on_mouse_press,
+                MouseObserver.SubscribeEvent.PRESSED,
+            ),
+            (
+                self.__blur_btn.on_mouse_release,
+                MouseObserver.SubscribeEvent.RELEASED,
             ),
         ]
 
@@ -87,7 +139,7 @@ class SnipperWindow(QMainWindow):
                 self.__toolbar_bottom.hide()
                 self.__toolbar_top.show_center_section()
         elif self.viewer.mode == Mode.VIDEO:
-            self.__color_picker_btn.set_active(False)
+            self.__color_picker_btn.deactivate()
             self.__toolbar_bottom.hide()
             self.__toolbar_top.hide_center_section()
             self.__middle_toolbar.hide()
@@ -125,7 +177,7 @@ class SnipperWindow(QMainWindow):
         self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.__middle_toolbar = MiddleToolBar(self.__color_picker_btn)
+        self.__middle_toolbar = MiddleToolBar(self.__color_picker_btn, self.__blur_btn)
 
         # Toolbar (at the top)
         self.__toolbar_top = TopToolBar(
@@ -159,6 +211,13 @@ class SnipperWindow(QMainWindow):
         )
         self.__mode_switching = ModeSwitching()
         self.__color_picker_btn = ColorPicker(self.viewer)
+        self.__blur_btn = Blur(
+            self.viewer.get_pixmap,
+            self.viewer.is_in_bound,
+            self.viewer.set_pixmap,
+            self.viewer.get_original_pixmap_coords_from_global,
+            self.__add_to_pixmap_history,
+        )
         self.__save_btn = SaveButton(self.__on_save)
         self.__copy_btn = CopyButton(self.__on_copy)
 
@@ -195,6 +254,15 @@ class SnipperWindow(QMainWindow):
 
     def __on_pre_capture(self) -> None:
         self.hide()
+
+        if self.is_expand_before and self.__current_mode == ModeSwitching.Mode.CAMERA:
+            self.__blur_btn.deactivate()
+            self.__color_picker_btn.deactivate()
+
+            current_pixmap = self.__pixmap_history.get_current_pixmap()
+            if current_pixmap is not None:
+                self.viewer.set_pixmap(current_pixmap)
+
         time.sleep(0.2)  # wait for main screen to hide
 
     def __on_post_capture(
@@ -205,12 +273,16 @@ class SnipperWindow(QMainWindow):
             self.show()
             return
 
+        self.__pixmap_history.clear()
         capture_area, capture_pixmap = capture_result
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
+            self.__current_mode = ModeSwitching.Mode.CAMERA
             self.viewer.set_mode(Mode.IMAGE)
             self.viewer.set_pixmap(capture_pixmap)
+            self.__add_to_pixmap_history(capture_pixmap)
             self.__show_with_expand()
         elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
+            self.__current_mode = ModeSwitching.Mode.VIDEO
             self.viewer.set_mode(Mode.VIDEO)
 
             self.video_recorder = VideoRecorder(
@@ -238,11 +310,30 @@ class SnipperWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Tab"), self)
         shortcut.activated.connect(self.__on_switch_mode_shortcut)
 
+        shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
+        shortcut.activated.connect(self.__on_undo)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
+        shortcut.activated.connect(self.__on_redo)
+
     def __on_switch_mode_shortcut(self) -> None:
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
             self.__mode_switching.video_mode_btn.click()
         elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
             self.__mode_switching.camera_mode_btn.click()
+
+    def __on_undo(self) -> None:
+        pixmap = self.__pixmap_history.undo()
+        if pixmap is not None:
+            self.viewer.set_pixmap(pixmap)
+
+    def __on_redo(self) -> None:
+        pixmap = self.__pixmap_history.redo()
+        if pixmap is not None:
+            self.viewer.set_pixmap(pixmap)
+
+    def __add_to_pixmap_history(self, pixmap: QPixmap) -> None:
+        self.__pixmap_history.add(pixmap)
 
 
 def run_snipper_window():
