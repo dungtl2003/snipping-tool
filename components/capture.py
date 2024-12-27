@@ -11,10 +11,15 @@ from PyQt6.QtGui import (
     QPainter,
     QPixmap,
 )
-from PyQt6.QtWidgets import QApplication, QPushButton, QWidget
+from PyQt6.QtWidgets import QPushButton, QWidget
 
+from components.utils import (
+    set_cross_cursor,
+    set_normal_cursor,
+    capture_all_screens_mss,
+    get_combined_screen_geometry_mss,
+)
 import os
-from components import utils
 from preload import ICON_DIR
 
 PLUS_ICON = os.path.join(ICON_DIR, "plus.svg")
@@ -52,7 +57,7 @@ class SnapshotOverlay(QWidget):
         self.__on_capture = on_capture
 
         # Calculate the geometry that covers all screens
-        self.__full_geometry = utils.get_combined_screen_geometry_mss()
+        self.__full_geometry = get_combined_screen_geometry_mss()
         self.setWindowFlags(
             self.windowFlags()
             | Qt.WindowType.FramelessWindowHint
@@ -61,9 +66,9 @@ class SnapshotOverlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
-        QApplication.setOverrideCursor(utils.create_white_cross_cursor())
+        set_cross_cursor()
 
-        self.__screen_pixmap = utils.capture_all_screens_mss()
+        self.__screen_pixmap = capture_all_screens_mss()
         self.__selection_start = QPoint()
         self.__selection_rect = QRect()
 
@@ -89,12 +94,12 @@ class SnapshotOverlay(QWidget):
 
     def keyPressEvent(self, a0: Optional[QtGui.QKeyEvent]) -> None:
         self.close()
-        QApplication.restoreOverrideCursor()
+        set_normal_cursor()
         self.__on_capture(None)
 
     def keyReleaseEvent(self, a0: Optional[QtGui.QKeyEvent]) -> None:
         self.close()
-        QApplication.restoreOverrideCursor()
+        set_normal_cursor()
         self.__on_capture(None)
 
     def mousePressEvent(self, a0: Optional[QtGui.QMouseEvent]) -> None:
@@ -128,5 +133,5 @@ class SnapshotOverlay(QWidget):
                 capture_area.translated(-self.__full_geometry.topLeft())
             )
 
-            QApplication.restoreOverrideCursor()
+            set_normal_cursor()
             self.__on_capture((capture_area, capture_pixmap))

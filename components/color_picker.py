@@ -3,6 +3,7 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton
 
 import os
+from components.utils import set_normal_cursor, set_cross_cursor
 from preload import ICON_DIR
 
 from components.viewer import Viewer
@@ -41,9 +42,9 @@ class ColorPicker(QPushButton):
         self.color_square.hide()
 
         if not self.__is_active:
-            QApplication.restoreOverrideCursor()
+            set_normal_cursor()
         else:
-            QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
+            set_cross_cursor(20, Qt.GlobalColor.gray)
 
     def set_active(self, active: bool) -> None:
         """
@@ -96,13 +97,13 @@ class ColorPicker(QPushButton):
         if not self.__viewer.is_in_bound(mouse_glob_pos):
             if self.__is_last_in_bound is not False:
                 self.__is_last_in_bound = False
-                QApplication.restoreOverrideCursor()
+                set_normal_cursor()
                 self.color_square.hide()
         else:
             need_render = True
             if self.__is_last_in_bound is not True:
                 self.__is_last_in_bound = True
-                QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
+                set_cross_cursor(20, Qt.GlobalColor.gray)
                 self.color_square.show()
 
         if not need_render:

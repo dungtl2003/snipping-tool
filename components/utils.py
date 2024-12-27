@@ -1,6 +1,6 @@
 from PIL import Image
 from PyQt6.QtCore import QRect, QSize, Qt
-from PyQt6.QtGui import QCursor, QImage, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QColor, QCursor, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication
 from PyQt6.sip import voidptr
 import cv2
@@ -10,14 +10,20 @@ import mss.tools
 import numpy as np
 
 
-def create_white_cross_cursor() -> QCursor:
-    """Create a white cross cursor."""
-    size = 32  # Cursor size
+def set_normal_cursor() -> None:
+    """Set the cursor to normal."""
+    QApplication.setOverrideCursor(Qt.CursorShape.ArrowCursor)
+
+
+def set_cross_cursor(
+    size: int = 32, color: QColor | Qt.GlobalColor = Qt.GlobalColor.white
+) -> None:
+    """Set the cursor to white cross."""
     pixmap = QPixmap(QSize(size, size))
     pixmap.fill(Qt.GlobalColor.transparent)  # Transparent background
 
     painter = QPainter(pixmap)
-    pen = QPen(Qt.GlobalColor.white)
+    pen = QPen(color)
     pen.setWidth(2)  # Adjust the line width
     painter.setPen(pen)
 
@@ -27,7 +33,7 @@ def create_white_cross_cursor() -> QCursor:
     painter.drawLine(0, center, size, center)  # Horizontal line
 
     painter.end()
-    return QCursor(pixmap)
+    QApplication.setOverrideCursor(QCursor(pixmap))
 
 
 def capture(rect: QRect) -> QPixmap | None:
