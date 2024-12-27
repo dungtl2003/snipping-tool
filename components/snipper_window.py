@@ -1,6 +1,6 @@
 import time
 from typing import Callable, List, Optional, Tuple
-from PyQt6.QtCore import QRect, Qt
+from PyQt6.QtCore import QRect, Qt, QByteArray, QBuffer
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
@@ -22,6 +22,7 @@ from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
 from components.mode_switching import ModeSwitching
 from components.video_recorder import VideoRecorder
 from components.viewer import Viewer, Mode
+from components.upload_cloud import DriveUploader
 from utils.styles import styles
 
 APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
@@ -91,6 +92,11 @@ class SnipperWindow(QMainWindow):
         self.__last_copy_pixmap: QPixmap | None = None
         self.__pixmap_history: PixmapHistory = PixmapHistory()
         self.__current_mode = ModeSwitching.Mode.CAMERA
+
+        # Add upload button
+        upload_btn = QPushButton("Upload to cloud", self)
+        upload_btn.clicked.connect(self.__handle_upload)
+        self.main_layout.addWidget(upload_btn)
 
     def subscribers(
         self,
@@ -221,6 +227,7 @@ class SnipperWindow(QMainWindow):
         )
         self.__save_btn = SaveButton(self.__on_save)
         self.__copy_btn = CopyButton(self.__on_copy)
+        self.__drive_uploader = DriveUploader(self)
 
     def __on_save(self) -> None:
         if not self.__save_btn.isEnabled():
@@ -342,6 +349,31 @@ class SnipperWindow(QMainWindow):
     def __add_to_pixmap_history(self, pixmap: QPixmap) -> None:
         self.__pixmap_history.add(pixmap)
 
+    def __handle_upload(self):
+        if self.viewer is not None:
+            image = self.viewer.get_image()  # Use the existing get_image() method
+            if image:  # If an image exists
+                # Upload the image
+                byte_array = QByteArray()
+                buffer = QBuffer(byte_array)
+                buffer.open(QBuffer.OpenModeFlag.WriteOnly)
+                image.save(buffer, "PNG")  # QImage has a save method
+                buffer.close()
+                
+                self.__drive_uploader.upload_data(
+                    byte_array,
+                    "screenshot.png",
+                    "image/png"
+                )
+            elif hasattr(self, 'video_recorder') and hasattr(self.video_recorder, 'output_file'):
+                # Upload the video
+                with open(self.video_recorder.output_file, 'rb') as f:
+                    video_data = f.read()
+                    self.__drive_uploader.upload_data(
+                        video_data,
+                        "recording.mp4", 
+                        "video/mp4"
+                    )
 
 def run_snipper_window():
     import sys
