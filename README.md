@@ -12,7 +12,7 @@ A simple snipping tool for Linux and Windows.
 
 ### Features
 
-- Take a screenshot of a selected area.
+- Take a screenshot of a selected area or the whole screen.
 - Copy the screenshot to the clipboard.
 - Have its own clipboard history.
 - Color picker.
@@ -49,6 +49,9 @@ You can download the executable for Windows and Linux from the [releases](coming
 
 - Press `Tab` to switch between the screenshot and video recording mode.
 - Press `Ctrl + N` to take a screenshot of a selected area.
+- Drag the mouse to select the area you want to take a screenshot of.
+- Press instead of dragging to take a screenshot of the whole screen.
+- Press any key to cancel taking a screenshot.
 - Press `Ctrl + S` to save the screenshot/video to a file.
 - Press `Ctrl + C` to copy the screenshot to the clipboard.
 - Press `Ctrl + Alt + Up` to show the clipboard history. Press it again to hide it.

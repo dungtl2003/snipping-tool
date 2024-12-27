@@ -157,7 +157,7 @@ def calculate_frame_task(
     is_recording: Event, shared_memory: DictProxy, capture_area: QRect
 ) -> None:
     while is_recording.is_set():
-        frame_bgr = utils.capture_mss_2(capture_area)
+        frame_bgr = utils.capture_mss(capture_area)
         shared_memory["latest_frame"] = frame_bgr
 
 

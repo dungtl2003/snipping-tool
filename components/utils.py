@@ -114,50 +114,7 @@ def capture_all_screens_mss() -> QPixmap:
         return pixmap
 
 
-def capture_mss(rect: QRect) -> QPixmap | None:
-    with mss.mss() as sct:
-        # List of monitors
-        combined_monitor = sct.monitors[0]
-
-        # Check if the rect intersects with the screen geometry
-        screen_geometry = QRect(
-            combined_monitor["left"],
-            combined_monitor["top"],
-            combined_monitor["width"],
-            combined_monitor["height"],
-        )
-
-        if not screen_geometry.intersects(rect):
-            return None
-
-        # Calculate the intersection of the QRect with the screen's geometry
-        intersection_rect = rect.intersected(screen_geometry)
-
-        # Capture the screen content for the intersection area
-        screenshot = sct.grab(
-            (
-                intersection_rect.x(),
-                intersection_rect.y(),
-                intersection_rect.width()
-                + intersection_rect.x(),  # idk why but this is needed
-                intersection_rect.height() + intersection_rect.y(),
-            )
-        )
-
-        img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
-        img = img.convert("RGBA")
-        img = QImage(
-            img.tobytes("raw", "RGBA"),
-            img.size[0],
-            img.size[1],
-            QImage.Format.Format_RGBA8888,
-        )
-
-        pixmap = QPixmap.fromImage(img)
-        return pixmap
-
-
-def capture_mss_2(rect: QRect) -> MatLike | None:
+def capture_mss(rect: QRect) -> MatLike | None:
     with mss.mss() as sct:
         # List of monitors
         combined_monitor = sct.monitors[0]
