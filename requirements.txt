@@ -2,8 +2,8 @@ opencv-python==4.10.0.84
 easyocr==1.7.2
 numpy==1.24.3
 pillow==11.0.0
-PyQt6==6.7.1
-PyQt6-Qt6==6.7.3
+PyQt6==6.8.0
+PyQt6-Qt6==6.8.1
 PyQt6_sip==13.8.0
 googletrans==4.0.0-rc1
 pyaudio==0.2.14
