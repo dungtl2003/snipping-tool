@@ -7,7 +7,6 @@ from components.blur import Blur
 from components.copy_btn import CopyButton
 from components.save import SaveButton
 from components.upload import ResourceType, UploadButton, UploadResource
-from components.utils import get_focus_screen_geometry
 from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
 import os
 
@@ -274,11 +273,6 @@ class SnipperWindow(QMainWindow):
 
         self.__pixmap_history.clear()
         capture_area, capture_pixmap = capture_result
-
-        # case when user click and release without dragging
-        if capture_area.width() <= 0 or capture_area.height() <= 0:
-            # we only need to update area, pixmap should be correct
-            capture_area = get_focus_screen_geometry()
 
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
             self.__current_mode = ModeSwitching.Mode.CAMERA
