@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
     QWidget,
+    QPushButton
 )
 from components.blur import Blur
 from components.copy_btn import CopyButton
