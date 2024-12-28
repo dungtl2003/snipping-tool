@@ -1,38 +1,96 @@
+import time
 from typing import Callable, List, Optional, Tuple
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QPixmap, QResizeEvent
+from PyQt6.QtCore import QRect, Qt
+from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
 from PyQt6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QVBoxLayout,
     QWidget,
 )
-from components.copy import CopyButton
+from components.blur import Blur
+from components.copy_btn import CopyButton
 from components.save import SaveButton
-from definitions import ICON_DIR
+from components.utils import get_focus_screen_geometry
+from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
 import os
 
 from components.mouse_observer import MouseObserver
+from components.color_picker import ColorPicker
+from components.capture import NewCapture
+from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
+from components.mode_switching import ModeSwitching
+from components.video_recorder import VideoRecorder
+from components.viewer import Viewer, Mode
+from utils.styles import styles
 
 APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
+
+
+class PixmapHistory:
+    def __init__(self) -> None:
+        self.__history: List[QPixmap] = []
+        self.__current_index = -1
+
+    def add(self, pixmap: QPixmap) -> None:
+        self.__history = self.__history[: self.__current_index + 1]
+        self.__history.append(pixmap)
+        self.__current_index += 1
+
+    def undo(self) -> QPixmap | None:
+        if self.__current_index <= 0:
+            return None
+
+        self.__current_index -= 1
+        return self.__history[self.__current_index]
+
+    def redo(self) -> QPixmap | None:
+        if self.__current_index >= len(self.__history) - 1:
+            return None
+
+        self.__current_index += 1
+        return self.__history[self.__current_index]
+
+    def clear(self) -> None:
+        self.__history.clear()
+        self.__current_index = -1
+
+    def get_current_pixmap(self) -> QPixmap | None:
+        if self.__current_index < 0 or self.__current_index >= len(self.__history):
+            return None
+
+        return self.__history[self.__current_index]
+
+    def __len__(self) -> int:
+        return len(self.__history)
 
 
 class SnipperWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
-        self.setWindowTitle("Becap")
+        self.setWindowTitle(APP_NAME)
         # Not working
         icon = QIcon()
         icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
         self.setWindowIcon(icon)
 
-        self.label = ImageLabel()
+        self.viewer = Viewer()
 
         self.setFixedSize(450, 100)
         self.is_expand_before = False
 
         self.__init_functions()
         self.__set_layout()
+
+        self.__setup_shortcut()
+
+        self.__copy_btn.disable()
+        self.__save_btn.disable()
+
+        self.__last_copy_pixmap: QPixmap | None = None
+        self.__pixmap_history: PixmapHistory = PixmapHistory()
+        self.__current_mode = ModeSwitching.Mode.CAMERA
 
     def subscribers(
         self,
@@ -43,39 +101,69 @@ class SnipperWindow(QMainWindow):
         :rtype: List[Tuple[Callable[..., None], MouseObserver.SubscribeEvent]]
         """
         return [
-            (self.__color_picker.pick_color, MouseObserver.SubscribeEvent.PRESSED),
+            (self.__color_picker_btn.pick_color, MouseObserver.SubscribeEvent.PRESSED),
             (
-                self.__color_picker.handle_mouse_movement,
+                self.__color_picker_btn.handle_mouse_movement,
                 MouseObserver.SubscribeEvent.MOVED,
             ),
+            (
+                self.__blur_btn.handle_mouse_movement,
+                MouseObserver.SubscribeEvent.MOVED,
+            ),
+            (
+                self.__blur_btn.on_mouse_press,
+                MouseObserver.SubscribeEvent.PRESSED,
+            ),
+            (
+                self.__blur_btn.on_mouse_release,
+                MouseObserver.SubscribeEvent.RELEASED,
+            ),
         ]
-
-    def show_with_expand(self) -> None:
-        if not self.is_expand_before:
-            self.is_expand_before = True
-
-            self.__toolbar_top.show_center_section()
-            self.__toolbar_top.show_right_section()
-            self.__toolbar_bottom.show()
-
-            self.setMinimumSize(450, 500)
-            self.setMaximumSize(16777215, 16777215)
-            self.resize(450, 500)
-
-        self.show()
 
     def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
         if not self.is_expand_before:
             return
 
-        # Toggle middle section visibility based on window width
-        # must hide first to remove widget from layout
-        if self.width() < 600:  # change this number to your desired width
-            self.__toolbar_top.hide_center_section()
-            self.__toolbar_bottom.show()
-        else:
+        self.__set_dynamic_size()
+
+    def __set_dynamic_size(self) -> None:
+        if (
+            self.viewer.mode == Mode.IMAGE
+        ):  # only in image mode we need to toggle the middle section
+            # Toggle middle section visibility based on window width
+            # must hide first to remove widget from layout
+            self.__middle_toolbar.show()
+            if self.width() < 600:  # change this number to your desired width
+                self.__toolbar_top.hide_center_section()
+                self.__toolbar_bottom.show()
+            else:
+                self.__toolbar_bottom.hide()
+                self.__toolbar_top.show_center_section()
+        elif self.viewer.mode == Mode.VIDEO:
+            self.__color_picker_btn.deactivate()
             self.__toolbar_bottom.hide()
-            self.__toolbar_top.show_center_section()
+            self.__toolbar_top.hide_center_section()
+            self.__middle_toolbar.hide()
+
+    def __show_with_expand(self) -> None:
+        if not self.is_expand_before:
+            self.__copy_btn.enable()
+            self.__save_btn.enable()
+
+            self.__toolbar_top.show_right_section()
+            self.is_expand_before = True
+            self.setMinimumSize(450, 500)
+            self.setMaximumSize(16777215, 16777215)
+            self.resize(450, 500)
+        else:
+            self.__set_dynamic_size()
+
+        if self.viewer.mode == Mode.VIDEO:
+            self.__copy_btn.disable()
+        elif self.viewer.mode == Mode.IMAGE:
+            self.__copy_btn.enable()
+
+        self.show()
 
     def __set_layout(self) -> None:
         """
@@ -90,45 +178,187 @@ class SnipperWindow(QMainWindow):
         self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.__middle_toolbar = MiddleToolBar(self.__color_picker)
+        self.__middle_toolbar = MiddleToolBar(self.__color_picker_btn, self.__blur_btn)
 
         # Toolbar (at the top)
         self.__toolbar_top = TopToolBar(
-            self.__new_capture,
+            self.__new_capture_btn,
             self.__mode_switching,
             self.__middle_toolbar,
-            self.__save,
-            self.__copy,
+            self.__save_btn,
+            self.__copy_btn,
         )
         # Main section
-        self.label.setVisible(True)
+        self.viewer.setVisible(True)
         # Toolbar (at the bottom)
         self.__toolbar_bottom = BottomToolBar(self.__middle_toolbar)
 
+        # Create a QScrollArea and set the QLabel as its widget
         self.main_layout.addWidget(
             self.__toolbar_top, alignment=Qt.AlignmentFlag.AlignTop
         )
-        self.main_layout.addWidget(self.label)
+        self.main_layout.addWidget(self.viewer)
         self.main_layout.addWidget(
             self.__toolbar_bottom, alignment=Qt.AlignmentFlag.AlignBottom
         )
-
-        # Window configuration
 
     def __init_functions(self) -> None:
         """
         Init the functions.
         :return: None
         """
-        self.__new_capture = NewCapture(self)
+        self.__new_capture_btn = NewCapture(
+            self.__on_pre_capture, self.__on_post_capture
+        )
         self.__mode_switching = ModeSwitching()
-        self.__color_picker = ColorPicker(self)
-        self.__save = SaveButton()
-        self.__copy = CopyButton()
+        self.__color_picker_btn = ColorPicker(self.viewer)
+        self.__blur_btn = Blur(
+            self.viewer.get_pixmap,
+            self.viewer.is_in_bound,
+            self.viewer.set_pixmap,
+            self.viewer.get_original_pixmap_coords_from_global,
+            self.__add_to_pixmap_history,
+        )
+        self.__save_btn = SaveButton(self.__on_save)
+        self.__copy_btn = CopyButton(self.__on_copy)
+
+    def __on_save(self) -> None:
+        if not self.__save_btn.isEnabled():
+            return
+
+        self.viewer.save()
+
+    def __on_copy(self) -> None:
+        if not self.__copy_btn.isEnabled():
+            return
+
+        pixmap = self.viewer.get_pixmap()
+        if pixmap is None:
+            return
+
+        image = pixmap.toImage()
+        assert image is not None and not image.isNull()
+
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setImage(image)
+
+        # avoid saving the same image to clipboard db multiple times
+        if self.__last_copy_pixmap is None or pixmap != self.__last_copy_pixmap:
+            saved_time_str = time.strftime("%Y%m%d%H%M%S")
+            new_file_path = os.path.join(
+                BECAP_CLIPBOARD_MANAGER_PATH, f"becap_clipboard_{saved_time_str}.png"
+            )
+
+            image.save(new_file_path, "PNG")
+            self.__last_copy_pixmap = pixmap
+
+    def __on_pre_capture(self) -> None:
+        self.hide()
+
+        if self.is_expand_before and self.__current_mode == ModeSwitching.Mode.CAMERA:
+            self.__blur_btn.deactivate()
+            self.__color_picker_btn.deactivate()
+
+            current_pixmap = self.__pixmap_history.get_current_pixmap()
+            if current_pixmap is not None:
+                self.viewer.set_pixmap(current_pixmap)
+
+        time.sleep(0.2)  # wait for main screen to hide
+
+    def __on_post_capture(
+        self,
+        capture_result: Tuple[QRect, QPixmap] | None,
+    ) -> None:
+        if capture_result is None:
+            self.show()
+            return
+
+        self.__pixmap_history.clear()
+        capture_area, capture_pixmap = capture_result
+
+        # case when user click and release without dragging
+        if capture_area.width() <= 0 or capture_area.height() <= 0:
+            # we only need to update area, pixmap should be correct
+            capture_area = get_focus_screen_geometry()
+
+        if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
+            self.__current_mode = ModeSwitching.Mode.CAMERA
+            self.viewer.set_mode(Mode.IMAGE)
+            self.viewer.set_pixmap(capture_pixmap)
+            self.__add_to_pixmap_history(capture_pixmap)
+            self.__show_with_expand()
+        elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
+            self.__current_mode = ModeSwitching.Mode.VIDEO
+            self.viewer.set_mode(Mode.VIDEO)
+
+            self.video_recorder = VideoRecorder(
+                capture_area, self.__on_post_video_recording
+            )
+            self.video_recorder.start_recording()
+
+    def __on_post_video_recording(self) -> None:
+        self.viewer.set_video(self.video_recorder.video_file_path)
+        self.__show_with_expand()
+
+    def __setup_shortcut(self):
+        shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        shortcut.activated.connect(self.__new_capture_btn.capture)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        shortcut.activated.connect(self.close)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        shortcut.activated.connect(self.__save_btn.click)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        shortcut.activated.connect(self.__copy_btn.click)
+
+        shortcut = QShortcut(QKeySequence("Tab"), self)
+        shortcut.activated.connect(self.__on_switch_mode_shortcut)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
+        shortcut.activated.connect(self.__on_undo)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
+        shortcut.activated.connect(self.__on_redo)
+
+    def __on_switch_mode_shortcut(self) -> None:
+        if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
+            self.__mode_switching.video_mode_btn.click()
+        elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
+            self.__mode_switching.camera_mode_btn.click()
+
+    def __on_undo(self) -> None:
+        pixmap = self.__pixmap_history.undo()
+        if pixmap is not None:
+            self.viewer.set_pixmap(pixmap)
+
+    def __on_redo(self) -> None:
+        pixmap = self.__pixmap_history.redo()
+        if pixmap is not None:
+            self.viewer.set_pixmap(pixmap)
+
+    def __add_to_pixmap_history(self, pixmap: QPixmap) -> None:
+        self.__pixmap_history.add(pixmap)
 
 
-from components.color_picker import ColorPicker
-from components.capture import NewCapture
-from components.image_label import ImageLabel
-from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
-from components.mode_switching import ModeSwitching
+def run_snipper_window():
+    import sys
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication(sys.argv)
+    app.setStyleSheet(styles)
+    w = SnipperWindow()
+    w.show()
+
+    window = w.window()
+    assert window is not None
+
+    window_handle = window.windowHandle()
+    assert window_handle is not None
+
+    mouse_observer = MouseObserver(window_handle)
+    mouse_observer.subcribe(w.subscribers())
+
+    app.exec()

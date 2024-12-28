@@ -6,3 +6,7 @@ PyQt6==6.7.1
 PyQt6-Qt6==6.7.3
 PyQt6_sip==13.8.0
 googletrans==4.0.0-rc1
+pyaudio==0.2.14
+mss==10.0.0
+ffmpeg-python==0.2.0
+pynput==1.7.7

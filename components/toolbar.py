@@ -1,10 +1,16 @@
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QToolBar, QWidget
 
+from components.blur import Blur
 from utils.styles import qtoolbar_style
+from components.mode_switching import ModeSwitching
+from components.capture import NewCapture
+from components.color_picker import ColorPicker
+from components.save import SaveButton
+from components.copy_btn import CopyButton
 
 import os
-from definitions import ICON_DIR
+from preload import ICON_DIR
 
 MORE_ICON = os.path.join(ICON_DIR, "more.svg")
 
@@ -20,7 +26,8 @@ class BaseToolBar(QToolBar):
 class MiddleToolBar(BaseToolBar):
     def __init__(
         self,
-        eye_dropper: "ColorPicker",
+        eye_dropper: ColorPicker,
+        blur_btn: Blur,
     ) -> None:
         super().__init__()
 
@@ -40,30 +47,53 @@ class MiddleToolBar(BaseToolBar):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(left_spacer)
         layout.addWidget(eye_dropper)
+        layout.addWidget(blur_btn)
         layout.addWidget(right_spacer)
 
         widget = QWidget()
         widget.setLayout(layout)
         self.addWidget(widget)
 
+        self.__eye_dropper = eye_dropper
+        self.__blur_btn = blur_btn
+
+        self.__eye_dropper.toggled.connect(self.__on_eye_dropper_toggled)
+        self.__blur_btn.toggled.connect(self.__on_blur_toggled)
+
+    def __on_eye_dropper_toggled(self) -> None:
+        """
+        Handle the eye dropper toggled.
+        :return: None
+        """
+        if self.__eye_dropper.isChecked():
+            self.__blur_btn.deactivate()
+
+    def __on_blur_toggled(self) -> None:
+        """
+        Handle the blur toggled.
+        :return: None
+        """
+        if self.__blur_btn.isChecked():
+            self.__eye_dropper.deactivate()
+
 
 class TopToolBar(BaseToolBar):
     # new     | mode |       eye dropper
     def __init__(
         self,
-        new_capture: "NewCapture",
-        mode_switching: "ModeSwitching",
+        new_capture: NewCapture,
+        mode_switching: ModeSwitching,
         middle_toolbar: MiddleToolBar,
-        save: "SaveButton",
-        copy: "CopyButton",
+        save: SaveButton,
+        copy: CopyButton,
     ) -> None:
         super().__init__()
 
-        self.__new_capture = new_capture
+        self.__new_capture_btn = new_capture
         self.__mode_switching = mode_switching
         self.__middle_toolbar = middle_toolbar
-        self.__save = save
-        self.__copy = copy
+        self.__save_btn = save
+        self.__copy_btn = copy
 
         self.__spacer = QWidget()
         self.__spacer.setSizePolicy(
@@ -137,7 +167,7 @@ class TopToolBar(BaseToolBar):
         self.__right_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
 
         # Save
-        self.__right_toolbar.addWidget(self.__save)
+        self.__right_toolbar.addWidget(self.__save_btn)
 
         # Space
         space = QWidget()
@@ -145,7 +175,7 @@ class TopToolBar(BaseToolBar):
         self.__right_toolbar.addWidget(space)
 
         # Copy
-        self.__right_toolbar.addWidget(self.__copy)
+        self.__right_toolbar.addWidget(self.__copy_btn)
 
         # Space
         space = QWidget()
@@ -180,7 +210,7 @@ class TopToolBar(BaseToolBar):
         self.__left_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
 
         # New
-        self.__left_toolbar.addWidget(self.__new_capture)
+        self.__left_toolbar.addWidget(self.__new_capture_btn)
 
         # Space
         space = QWidget()
@@ -241,10 +271,3 @@ class BottomToolBar(BaseToolBar):
         """
         self.__layout.removeWidget(self.__middle_toolbar)
         return super().hide()
-
-
-from components.mode_switching import ModeSwitching
-from components.capture import NewCapture
-from components.color_picker import ColorPicker
-from components.save import SaveButton
-from components.copy import CopyButton
