@@ -1,11 +1,10 @@
 import io
 from enum import Enum
-from typing import Any, Callable, List, Optional, Tuple, Union
-from PyQt6.QtCore import QBuffer, QByteArray, QThread, QTimer, Qt, pyqtSignal
+from typing import Callable, List, Optional, Tuple, Union
+from PyQt6.QtCore import QBuffer, QByteArray, QThread, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QImage
 from PyQt6.QtWidgets import (
     QDialog,
-    QMessageBox,
     QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -19,6 +18,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.discovery import build
 
+from components.message_dialog import CustomInformationDialog, CustomCriticalDialog
 from components.loading_dialog import LoadingDialog
 from preload import ICON_DIR
 
@@ -58,25 +58,6 @@ class UploadButton(QPushButton):
 
     def __upload(self) -> None:
         self.__cloud_uploader.show()
-
-    # def __upload(self):
-    #     resource = self.__on_upload_event()
-    #
-    #     if resource.resource_type == ResourceType.IMAGE:
-    #         image = resource.image
-    #         assert image is not None
-    #         self.__upload_image(image)
-    #     elif resource.resource_type == ResourceType.VIDEO:
-    #         raise NotImplementedError("Video upload is not implemented yet.")
-    #
-    # def __upload_image(self, image: QImage):
-    #     byte_array = QByteArray()
-    #     buffer = QBuffer(byte_array)
-    #     buffer.open(QBuffer.OpenModeFlag.WriteOnly)
-    #     image.save(buffer, "PNG")
-    #     buffer.close()
-    #
-    #     self.__drive_uploader.upload_data(byte_array, "screenshot.png", "image/png")
 
 
 class Message:
@@ -154,11 +135,11 @@ class CloudUploader(QDialog):
 
     def __on_upload_complete(self, message: Message):
         self.__loading_dialog.close()
-        QMessageBox.information(self.__parent, message.title, message.message)
+        CustomInformationDialog(message.title, message.message, self.__parent).exec()
 
     def __on_upload_error(self, message: Message):
         self.__loading_dialog.close()
-        QMessageBox.critical(self.__parent, message.title, message.message)
+        CustomCriticalDialog(message.title, message.message, self.__parent).exec()
 
 
 class DriveFolder:
@@ -247,7 +228,9 @@ class DriveFolderPicker(QDialog):
                 QTreeWidgetItem(item)
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load folders: {str(e)}")
+            CustomCriticalDialog(
+                "Error", f"Failed to load folders: {str(e)}", self
+            ).exec()
 
     def __folder_selected(self, item: QTreeWidgetItem, column: int):
         folder_data = item.data(0, Qt.ItemDataRole.UserRole)
