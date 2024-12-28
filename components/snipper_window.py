@@ -370,7 +370,7 @@ class SnipperWindow(QMainWindow):
                         )
                 elif self.viewer.mode == Mode.VIDEO:
                     # Handle video upload
-                    video_path = getattr(self.video_recorder, 'output_file', None)
+                    video_path = self.video_recorder.video_file_path
                     if video_path and os.path.exists(video_path):
                         with open(video_path, 'rb') as f:
                             video_data = f.read()
