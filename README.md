@@ -125,3 +125,6 @@ You can download the executable for Windows and Linux from the [releases](coming
 | `Ctrl + Alt + Up` | Toggle the clipboard history. |
 | `Ctrl + Z` | Undo the last editing action. |
 | `Ctrl + Y` | Redo the last editing action. |
+| `Ctrl + P` | Toggle the color picker. |
+| `Ctrl + B` | Toggle the blur. |
+| `Ctrl + U` | Upload the screenshot/video to google drive. |

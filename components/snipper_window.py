@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from components.blur import Blur
 from components.copy_btn import CopyButton
 from components.save import SaveButton
+from components.shortcut_blocking import ShortcutBlockable
 from components.upload import ResourceType, UploadButton, UploadResource
 from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
 import os
@@ -86,6 +87,7 @@ class SnipperWindow(QMainWindow):
         self.__last_copy_pixmap: QPixmap | None = None
         self.__pixmap_history: PixmapHistory = PixmapHistory()
         self.__current_mode = ModeSwitching.Mode.CAMERA
+        self.__shortcut_blockable_list: List[ShortcutBlockable] = [self.__blur_btn]
 
     def subscribers(
         self,
@@ -135,7 +137,6 @@ class SnipperWindow(QMainWindow):
                 self.__toolbar_bottom.hide()
                 self.__toolbar_top.show_center_section()
         elif self.viewer.mode == Mode.VIDEO:
-            self.__color_picker_btn.deactivate()
             self.__toolbar_bottom.hide()
             self.__toolbar_top.hide_center_section()
             self.__middle_toolbar.hide()
@@ -204,7 +205,7 @@ class SnipperWindow(QMainWindow):
         :return: None
         """
         self.__new_capture_btn = NewCapture(
-            self.__on_pre_capture, self.__on_post_capture
+            self.__on_pre_capture_event, self.__on_post_capture_event
         )
         self.__mode_switching = ModeSwitching()
         self.__color_picker_btn = ColorPicker(self.viewer)
@@ -215,17 +216,17 @@ class SnipperWindow(QMainWindow):
             self.viewer.get_original_pixmap_coords_from_global,
             self.__add_to_pixmap_history,
         )
-        self.__save_btn = SaveButton(self.__on_save)
-        self.__copy_btn = CopyButton(self.__on_copy)
+        self.__save_btn = SaveButton(self.__on_save_event)
+        self.__copy_btn = CopyButton(self.__on_copy_event)
         self.__upload_btn = UploadButton(self.__on_upload_event, self)
 
-    def __on_save(self) -> None:
+    def __on_save_event(self) -> None:
         if not self.__save_btn.isEnabled():
             return
 
         self.viewer.save()
 
-    def __on_copy(self) -> None:
+    def __on_copy_event(self) -> None:
         if not self.__copy_btn.isEnabled():
             return
 
@@ -250,20 +251,18 @@ class SnipperWindow(QMainWindow):
             image.save(new_file_path, "PNG")
             self.__last_copy_pixmap = pixmap
 
-    def __on_pre_capture(self) -> None:
+    def __on_pre_capture_event(self) -> None:
         self.hide()
+        self.__deactivate_utilities()
 
         if self.is_expand_before and self.__current_mode == ModeSwitching.Mode.CAMERA:
-            self.__blur_btn.deactivate()
-            self.__color_picker_btn.deactivate()
-
             current_pixmap = self.__pixmap_history.get_current_pixmap()
             if current_pixmap is not None:
                 self.viewer.set_pixmap(current_pixmap)
 
         time.sleep(0.2)  # wait for main screen to hide
 
-    def __on_post_capture(
+    def __on_post_capture_event(
         self,
         capture_result: Tuple[QRect, QPixmap] | None,
     ) -> None:
@@ -285,53 +284,98 @@ class SnipperWindow(QMainWindow):
             self.viewer.set_mode(Mode.VIDEO)
 
             self.__video_recorder = VideoRecorder(
-                capture_area, self.__on_post_video_recording
+                capture_area, self.__on_post_video_recording_event
             )
             self.__video_recorder.start_recording()
 
-    def __on_post_video_recording(self) -> None:
+    def __on_post_video_recording_event(self) -> None:
         self.viewer.set_video(self.__video_recorder.video_file_path)
         self.__show_with_expand()
 
     def __setup_shortcut(self):
+        # Can be used whenever the main window is focused
         shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
         shortcut.activated.connect(self.__new_capture_btn.capture)
-
         shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
         shortcut.activated.connect(self.close)
-
-        shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
-        shortcut.activated.connect(self.__save_btn.click)
-
-        shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
-        shortcut.activated.connect(self.__copy_btn.click)
-
         shortcut = QShortcut(QKeySequence("Tab"), self)
-        shortcut.activated.connect(self.__on_switch_mode_shortcut)
+        shortcut.activated.connect(self.__on_switch_mode_shortcut_action)
 
+        # Cannot be used when being blocked
+        shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        shortcut.activated.connect(self.__on_save_action)
+        shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        shortcut.activated.connect(self.__on_copy_action)
         shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
-        shortcut.activated.connect(self.__on_undo)
-
+        shortcut.activated.connect(self.__on_undo_action)
         shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
-        shortcut.activated.connect(self.__on_redo)
+        shortcut.activated.connect(self.__on_redo_action)
+        shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
+        shortcut.activated.connect(self.__on_pick_color_action)
+        shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+        shortcut.activated.connect(self.__on_blur_action)
+        shortcut = QShortcut(QKeySequence("Ctrl+U"), self)
+        shortcut.activated.connect(self.__on_upload_action)
 
-    def __on_switch_mode_shortcut(self) -> None:
+    def __can_shortcut(self) -> bool:
+        return all(
+            not shortcut.is_blocking() for shortcut in self.__shortcut_blockable_list
+        )
+
+    def __on_upload_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
+        self.__upload_btn.click()
+
+    def __on_blur_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
+        self.__blur_btn.toggle()
+
+    def __on_pick_color_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
+        self.__color_picker_btn.toggle()
+
+    def __on_save_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
+        self.__save_btn.click()
+
+    def __on_copy_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
+        self.__copy_btn.click()
+
+    def __on_switch_mode_shortcut_action(self) -> None:
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
             self.__mode_switching.video_mode_btn.click()
         elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
             self.__mode_switching.camera_mode_btn.click()
 
-    def __on_undo(self) -> None:
+    def __on_undo_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
         pixmap = self.__pixmap_history.undo()
         if pixmap is not None:
             self.viewer.set_pixmap(pixmap)
 
-    def __on_redo(self) -> None:
+    def __on_redo_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
         pixmap = self.__pixmap_history.redo()
         if pixmap is not None:
             self.viewer.set_pixmap(pixmap)
 
     def __on_upload_event(self) -> UploadResource:
+        self.__deactivate_utilities()
         if self.viewer.mode == Mode.IMAGE:
             image = self.viewer.get_pixmap()
             assert image is not None
@@ -345,6 +389,11 @@ class SnipperWindow(QMainWindow):
 
     def __add_to_pixmap_history(self, pixmap: QPixmap) -> None:
         self.__pixmap_history.add(pixmap)
+
+    def __deactivate_utilities(self) -> None:
+        self.__blur_btn.deactivate()
+        self.__color_picker_btn.deactivate()
+        self.__blur_btn.unblock()
 
 
 def run_snipper_window():

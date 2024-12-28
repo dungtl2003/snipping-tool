@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPoint, QPointF, QRect, Qt
 from PyQt6.QtGui import QColor, QIcon, QMouseEvent, QPainter, QPixmap
 from PyQt6.QtWidgets import QPushButton
 
+from components.shortcut_blocking import ShortcutBlockable
 from components.utils import set_cross_cursor, set_normal_cursor
 from functionalities.blur import apply_blur_effect
 from preload import ICON_DIR
@@ -18,7 +19,7 @@ class MouseState(Enum):
     DRAGGING = 1
 
 
-class Blur(QPushButton):
+class Blur(QPushButton, ShortcutBlockable):
     def __init__(
         self,
         receive_pixmap: Callable[[], QPixmap | None],
@@ -58,14 +59,27 @@ class Blur(QPushButton):
         self.__is_active = False
         self.setChecked(False)
         self.__mouse_state = MouseState.NORMAL
+        set_normal_cursor()
+
+    def activate(self) -> None:
+        """
+        Activate the blur button.
+        :return: None
+        """
+        self.__is_active = True
+        self.setChecked(True)
+        self.__mouse_state = MouseState.NORMAL
+        set_cross_cursor()
 
     def toggle(self) -> None:
         """
-        Toggle the color picker.
+        Toggle the blur button.
         :return: None
         """
-        self.__is_active = not self.__is_active
-        self.setChecked(self.__is_active)
+        if self.__is_active:
+            self.deactivate()
+        else:
+            self.activate()
 
     def handle_mouse_movement(self, a0: QMouseEvent) -> None:
         """
@@ -98,6 +112,7 @@ class Blur(QPushButton):
             return
 
         self.__mouse_state = MouseState.DRAGGING
+        self.block()
         self.__original_pixmap = self.__receive_pixmap()
         if self.__original_pixmap is None:
             return
@@ -121,6 +136,7 @@ class Blur(QPushButton):
             return
 
         self.__mouse_state = MouseState.NORMAL
+        self.unblock()
 
         if self.__selection_rect.isNull():
             return

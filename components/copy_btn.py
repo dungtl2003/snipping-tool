@@ -30,6 +30,9 @@ class CopyButton(QPushButton):
         self.setEnabled(False)
 
     def __copy(self):
+        if not self.isEnabled():
+            return
+
         self.__animate_button()
         self.__on_copy_event()
 
