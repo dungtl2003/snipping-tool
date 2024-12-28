@@ -87,7 +87,7 @@ class ColorPicker(QPushButton):
         mouse_glob_pos = a0.globalPosition()
 
         need_render = False
-        if not self.__viewer.is_in_bound(mouse_glob_pos):
+        if not self.__viewer.is_in_pixmap_bound(mouse_glob_pos):
             if self.__is_last_in_bound is not False:
                 self.__is_last_in_bound = False
                 set_normal_cursor()

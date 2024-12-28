@@ -1,8 +1,8 @@
 import time
 from typing import Callable, List, Optional, Tuple
-from PyQt6.QtCore import QRect, Qt, QByteArray, QBuffer
+from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from components.blur import Blur
 from components.copy_btn import CopyButton
 from components.save import SaveButton
@@ -18,7 +18,6 @@ from components.toolbar import MiddleToolBar, TopToolBar, BottomToolBar
 from components.mode_switching import ModeSwitching
 from components.video_recorder import VideoRecorder
 from components.viewer import Viewer, Mode
-from components.upload_cloud import DriveUploader
 from utils.styles import styles
 
 APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
@@ -212,7 +211,7 @@ class SnipperWindow(QMainWindow):
         self.__color_picker_btn = ColorPicker(self.viewer)
         self.__blur_btn = Blur(
             self.viewer.get_pixmap,
-            self.viewer.is_in_bound,
+            self.viewer.is_in_pixmap_bound,
             self.viewer.set_pixmap,
             self.viewer.get_original_pixmap_coords_from_global,
             self.__add_to_pixmap_history,
@@ -291,13 +290,13 @@ class SnipperWindow(QMainWindow):
             self.__current_mode = ModeSwitching.Mode.VIDEO
             self.viewer.set_mode(Mode.VIDEO)
 
-            self.video_recorder = VideoRecorder(
+            self.__video_recorder = VideoRecorder(
                 capture_area, self.__on_post_video_recording
             )
-            self.video_recorder.start_recording()
+            self.__video_recorder.start_recording()
 
     def __on_post_video_recording(self) -> None:
-        self.viewer.set_video(self.video_recorder.video_file_path)
+        self.viewer.set_video(self.__video_recorder.video_file_path)
         self.__show_with_expand()
 
     def __setup_shortcut(self):
@@ -345,7 +344,8 @@ class SnipperWindow(QMainWindow):
             image = image.toImage()
             return UploadResource(ResourceType.IMAGE, image=image)
         elif self.viewer.mode == Mode.VIDEO:
-            raise NotImplementedError("Video upload is not implemented yet.")
+            video_path = self.viewer.get_video_path()
+            return UploadResource(ResourceType.VIDEO, video_url=video_path)
 
         raise ValueError("Invalid mode")
 

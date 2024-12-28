@@ -1,6 +1,7 @@
 import io
+import time
 from enum import Enum
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple
 from PyQt6.QtCore import QBuffer, QByteArray, QThread, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QImage
 from PyQt6.QtWidgets import (
@@ -40,7 +41,42 @@ class UploadResource:
     ) -> None:
         self.resource_type = resource_type
         self.image = image
-        self.__video_url = video_url
+        self.video_url = video_url
+
+
+class ResourceConverter(QThread):
+    resource_converted = pyqtSignal(bytes, ResourceType)
+    resource_conversion_error = pyqtSignal(str)
+
+    def __init__(self, resource: UploadResource):
+        super().__init__()
+        self.__resource = resource
+
+    def run(self) -> None:
+        if self.__resource.resource_type == ResourceType.IMAGE:
+            image = self.__resource.image
+            assert image is not None
+            byte_array = QByteArray()
+            buffer = QBuffer(byte_array)
+            buffer.open(QBuffer.OpenModeFlag.WriteOnly)
+            image.save(buffer, "PNG")
+            buffer.close()
+            byte_array = byte_array.data()
+            self.resource_converted.emit(byte_array, ResourceType.IMAGE)
+            return
+
+        if self.__resource.resource_type == ResourceType.VIDEO:
+            video_url = self.__resource.video_url
+            assert video_url is not None
+            if os.path.exists(video_url):
+                with open(video_url, "rb") as f:
+                    self.resource_converted.emit(f.read(), ResourceType.VIDEO)
+                return
+
+            self.resource_conversion_error.emit(f"File not found: {video_url}")
+            return
+
+        self.resource_conversion_error.emit("Invalid resource type")
 
 
 class UploadButton(QPushButton):
@@ -53,11 +89,28 @@ class UploadButton(QPushButton):
 
         self.setToolTip("Upload to Cloud")
         self.clicked.connect(self.__upload)
-        self.__cloud_uploader = CloudUploader(on_upload_event, parent)
-        self.__cloud_uploader.hide()
+        self.__parent = parent
+        self.__on_upload_event = on_upload_event
 
     def __upload(self) -> None:
+        self.__loading_dialog = LoadingDialog(self.__parent)
+        resource = self.__on_upload_event()
+        converter = ResourceConverter(resource)
+        converter.resource_converted.connect(self.__on_complete)
+        converter.resource_conversion_error.connect(self.__on_error)
+        converter.start()
+        self.__loading_dialog.show_loading()
+
+    def __on_complete(self, byte_array: bytes, rtype: ResourceType) -> None:
+        if self.__loading_dialog:
+            self.__loading_dialog.close()
+        self.__cloud_uploader = CloudUploader(byte_array, rtype, self.__parent)
         self.__cloud_uploader.show()
+
+    def __on_error(self, message: str) -> None:
+        if self.__loading_dialog:
+            self.__loading_dialog.close()
+        CustomCriticalDialog("Error", message, self.__parent).exec()
 
 
 class Message:
@@ -73,17 +126,19 @@ class Message:
 class CloudUploader(QDialog):
     def __init__(
         self,
-        on_upload_event: Callable[[], UploadResource],
+        resource: bytes,
+        rtype: ResourceType,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
         self.__parent = parent
+        self.__resource = resource
+        self.__rtype = rtype
         self.setWindowTitle("Upload to Cloud")
         self.setModal(True)
 
         layout = QVBoxLayout()
 
-        self.__on_upload_event = on_upload_event
         self.__drive_uploader = DriveUploader()
         self.__drive_upload_btn = QPushButton(
             QIcon(DRIVE_ICON), "Upload to Google Drive"
@@ -96,35 +151,32 @@ class CloudUploader(QDialog):
         self.setFixedSize(400, 100)
 
     def __on_drive_upload(self):
-        resource = self.__get_resource()
         self.close()
+
+        saved_time = time.strftime("%Y%m%d%H%M%S")
+
+        ext = ""
+        if self.__rtype == ResourceType.IMAGE:
+            ext = "png"
+            rtype = "image/png"
+        elif self.__rtype == ResourceType.VIDEO:
+            ext = "mp4"
+            rtype = "video/mp4"
+        else:
+            raise ValueError("Invalid resource type")
+
+        saved_filename = f"becap_upload_{saved_time}.{ext}"
+
         self.__drive_uploader.upload_data(
-            resource,
-            "screenshot.png",
-            "image/png",
+            self.__resource,
+            saved_filename,
+            rtype,
             self.__on_cancel_upload,
             self.__on_uploading,
             self.__on_upload_complete,
             self.__on_upload_error,
             self.__parent,
         )
-
-    def __get_resource(self) -> Union[QByteArray, bytes]:
-        resource = self.__on_upload_event()
-
-        if resource.resource_type == ResourceType.IMAGE:
-            image = resource.image
-            assert image is not None
-            byte_array = QByteArray()
-            buffer = QBuffer(byte_array)
-            buffer.open(QBuffer.OpenModeFlag.WriteOnly)
-            image.save(buffer, "PNG")
-            buffer.close()
-            return byte_array
-        elif resource.resource_type == ResourceType.VIDEO:
-            raise NotImplementedError("Video upload is not implemented yet.")
-
-        raise ValueError("Invalid resource type")
 
     def __on_cancel_upload(self):
         self.show()
@@ -134,11 +186,13 @@ class CloudUploader(QDialog):
         self.__loading_dialog.show_loading()
 
     def __on_upload_complete(self, message: Message):
-        self.__loading_dialog.close()
+        if self.__loading_dialog:
+            self.__loading_dialog.close()
         CustomInformationDialog(message.title, message.message, self.__parent).exec()
 
     def __on_upload_error(self, message: Message):
-        self.__loading_dialog.close()
+        if self.__loading_dialog:
+            self.__loading_dialog.close()
         CustomCriticalDialog(message.title, message.message, self.__parent).exec()
 
 
@@ -248,7 +302,7 @@ class DriveUploader:
 
     def upload_data(
         self,
-        data: Union[QByteArray, bytes],
+        data: bytes,
         filename: str,
         mime_type: str,
         on_cancel_upload: Callable[[], None],
@@ -322,7 +376,7 @@ class DriveUploader:
     def __start_upload(
         self,
         service,
-        data: Union[QByteArray, bytes],
+        data: bytes,
         filename: str,
         mime_type: str,
         folder_id: str,
@@ -352,7 +406,7 @@ class UploadWorker(QThread):
     def __init__(
         self,
         service,
-        data: Union[QByteArray, bytes],
+        data: bytes,
         filename: str,
         folder_id: str,
         mime_type: str,
@@ -365,11 +419,7 @@ class UploadWorker(QThread):
         self.__service = service
 
     def __upload_data(self) -> Tuple[str, str]:
-        if isinstance(self.__data, QByteArray):
-            data_bytes = self.__data.data()
-        else:
-            data_bytes = self.__data
-
+        data_bytes = self.__data
         fh = io.BytesIO(data_bytes)
         file_metadata = {"name": self.__filename, "parents": [self.__folder_id]}
         media = MediaIoBaseUpload(fh, mimetype=self.__mime_type, resumable=True)
