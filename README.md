@@ -63,8 +63,8 @@ You can download the executable for Windows and Linux from the [releases](coming
 - Drag the mouse to select the area you want to record.
 - Press instead of dragging to record the whole screen.
 - Press any key to cancel recording.
-- When recording, you can drag the timer button to move it around.
-- Press the timer button to stop recording.
+- When recording, you can drag the timer button to move it around using the right mouse button.
+- Left-click on the timer button to pause/resume the recording.
 
 
 #### Play the video
@@ -110,8 +110,9 @@ You can download the executable for Windows and Linux from the [releases](coming
 - Each time you copy a screenshot, it will be added to the clipboard history.
 - Press `Ctrl + Alt + Up` to show the clipboard history.
 - Press `Ctrl + Alt + Up` again to hide the clipboard history.
-- Click on an item in the clipboard history to copy it to the clipboard.
+- Left-click on an item in the clipboard history to copy it to the clipboard.
 - The clipboard history will contain at most 20 items and will be saved when you close the app so that you can access it later.
+- Right-click on an item in the clipboard history to copy it to the clipboard and remove it from the history.
 
 #### Shortcuts
 

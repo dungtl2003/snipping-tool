@@ -42,6 +42,7 @@ class AnimatedLabel(QLabel):
         w: int,
         h: int,
         on_selected: Callable[[ClipboardItem], None],
+        on_delete: Callable[["AnimatedLabel"], None],
     ) -> None:
         super().__init__()
         self.setFixedSize(w, h)
@@ -62,7 +63,8 @@ class AnimatedLabel(QLabel):
         self.__original_y = None
         self.__original_geometry = None
         self.__on_selected = on_selected
-        self.__item = item
+        self.__on_delete = on_delete
+        self.item = item
 
     def unlock_animation(self):
         # x coordinate can be changed depending on the list
@@ -74,7 +76,10 @@ class AnimatedLabel(QLabel):
     def mousePressEvent(self, ev: Optional[QMouseEvent]) -> None:
         assert ev is not None
         if ev.button() == Qt.MouseButton.LeftButton:
-            self.__on_selected(self.__item)
+            self.__on_selected(self.item)
+        elif ev.button() == Qt.MouseButton.RightButton:
+            if self.item is not None:
+                self.__on_delete(self)
 
     def enterEvent(self, event: Optional[QEnterEvent]) -> None:
         # Animate to move up when hovered
@@ -217,7 +222,13 @@ class ClipboardManager(QWidget):
         for item in self.__items:
             total_width += self.__lw + 10
             self.content_layout.addWidget(
-                AnimatedLabel(item, self.__lw, self.__lh, self.__on_label_selected)
+                AnimatedLabel(
+                    item,
+                    self.__lw,
+                    self.__lh,
+                    self.__on_label_selected,
+                    self.__on_label_deleted,
+                )
             )
 
         if len(self.__items) == 0:
@@ -317,12 +328,26 @@ class ClipboardManager(QWidget):
         if self.__is_animating:
             return
 
+        self.__save_to_sys_clipboard(item)
+        self.__hide_with_animation()
+
+    def __on_label_deleted(self, label: AnimatedLabel):
+        if self.__is_animating:
+            return
+
+        item = label.item
+        self.__save_to_sys_clipboard(item)
+
+        label.deleteLater()
+        self.content_layout.removeWidget(label)
+        os.remove(label.item.file_path)
+
+    def __save_to_sys_clipboard(self, item: ClipboardItem):
         clipboard = QApplication.clipboard()
         if clipboard is None:
             return
 
         clipboard.setPixmap(item.image)
-        self.__hide_with_animation()
 
 
 def run_clipboard_manager():
