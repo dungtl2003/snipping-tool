@@ -1,18 +1,13 @@
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QToolBar, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QSizePolicy, QToolBar, QWidget
 
 from components.blur import Blur
+from components.upload import UploadButton
 from utils.styles import qtoolbar_style
 from components.mode_switching import ModeSwitching
 from components.capture import NewCapture
 from components.color_picker import ColorPicker
 from components.save import SaveButton
 from components.copy_btn import CopyButton
-
-import os
-from preload import ICON_DIR
-
-MORE_ICON = os.path.join(ICON_DIR, "more.svg")
 
 
 class BaseToolBar(QToolBar):
@@ -86,6 +81,7 @@ class TopToolBar(BaseToolBar):
         middle_toolbar: MiddleToolBar,
         save: SaveButton,
         copy: CopyButton,
+        upload: UploadButton,
     ) -> None:
         super().__init__()
 
@@ -94,6 +90,7 @@ class TopToolBar(BaseToolBar):
         self.__middle_toolbar = middle_toolbar
         self.__save_btn = save
         self.__copy_btn = copy
+        self.__upload_btn = upload
 
         self.__spacer = QWidget()
         self.__spacer.setSizePolicy(
@@ -160,7 +157,7 @@ class TopToolBar(BaseToolBar):
         """
         self.__left_toolbar.hide()
 
-    # save copy | more
+    # save copy | upload
     def __add_right_section(self):
         self.__right_toolbar = QToolBar()
         self.__right_toolbar.setMovable(False)
@@ -182,7 +179,7 @@ class TopToolBar(BaseToolBar):
         space.setFixedSize(10, 10)
         self.__right_toolbar.addWidget(space)
 
-        # |
+        # Separator
         self.__right_toolbar.addSeparator()
 
         # Space
@@ -190,9 +187,8 @@ class TopToolBar(BaseToolBar):
         space.setFixedSize(10, 10)
         self.__right_toolbar.addWidget(space)
 
-        # More
-        more_button = QPushButton(QIcon(MORE_ICON), "")
-        self.__right_toolbar.addWidget(more_button)
+        # Upload
+        self.__right_toolbar.addWidget(self.__upload_btn)
 
         right_layout = QHBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)

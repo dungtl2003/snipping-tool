@@ -2,16 +2,11 @@ import time
 from typing import Callable, List, Optional, Tuple
 from PyQt6.QtCore import QRect, Qt, QByteArray, QBuffer
 from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
-from PyQt6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QVBoxLayout,
-    QWidget,
-    QPushButton
-)
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton
 from components.blur import Blur
 from components.copy_btn import CopyButton
 from components.save import SaveButton
+from components.upload import ResourceType, UploadButton, UploadResource
 from components.utils import get_focus_screen_geometry
 from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
 import os
@@ -93,11 +88,6 @@ class SnipperWindow(QMainWindow):
         self.__last_copy_pixmap: QPixmap | None = None
         self.__pixmap_history: PixmapHistory = PixmapHistory()
         self.__current_mode = ModeSwitching.Mode.CAMERA
-
-        # Add upload button
-        upload_btn = QPushButton("Upload to cloud", self)
-        upload_btn.clicked.connect(self.__handle_upload)
-        self.main_layout.addWidget(upload_btn)
 
     def subscribers(
         self,
@@ -194,6 +184,7 @@ class SnipperWindow(QMainWindow):
             self.__middle_toolbar,
             self.__save_btn,
             self.__copy_btn,
+            self.__upload_btn,
         )
         # Main section
         self.viewer.setVisible(True)
@@ -228,7 +219,7 @@ class SnipperWindow(QMainWindow):
         )
         self.__save_btn = SaveButton(self.__on_save)
         self.__copy_btn = CopyButton(self.__on_copy)
-        self.__drive_uploader = DriveUploader(self)
+        self.__upload_btn = UploadButton(self.__on_upload_event, self)
 
     def __on_save(self) -> None:
         if not self.__save_btn.isEnabled():
@@ -347,34 +338,20 @@ class SnipperWindow(QMainWindow):
         if pixmap is not None:
             self.viewer.set_pixmap(pixmap)
 
+    def __on_upload_event(self) -> UploadResource:
+        if self.viewer.mode == Mode.IMAGE:
+            image = self.viewer.get_pixmap()
+            assert image is not None
+            image = image.toImage()
+            return UploadResource(ResourceType.IMAGE, image=image)
+        elif self.viewer.mode == Mode.VIDEO:
+            raise NotImplementedError("Video upload is not implemented yet.")
+
+        raise ValueError("Invalid mode")
+
     def __add_to_pixmap_history(self, pixmap: QPixmap) -> None:
         self.__pixmap_history.add(pixmap)
 
-    def __handle_upload(self):
-        if self.viewer is not None:
-            image = self.viewer.get_image()  # Use the existing get_image() method
-            if image:  # If an image exists
-                # Upload the image
-                byte_array = QByteArray()
-                buffer = QBuffer(byte_array)
-                buffer.open(QBuffer.OpenModeFlag.WriteOnly)
-                image.save(buffer, "PNG")  # QImage has a save method
-                buffer.close()
-                
-                self.__drive_uploader.upload_data(
-                    byte_array,
-                    "screenshot.png",
-                    "image/png"
-                )
-            elif hasattr(self, 'video_recorder') and hasattr(self.video_recorder, 'output_file'):
-                # Upload the video
-                with open(self.video_recorder.output_file, 'rb') as f:
-                    video_data = f.read()
-                    self.__drive_uploader.upload_data(
-                        video_data,
-                        "recording.mp4", 
-                        "video/mp4"
-                    )
 
 def run_snipper_window():
     import sys

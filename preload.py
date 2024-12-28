@@ -126,6 +126,7 @@ APP_NAME = "becap"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(ROOT_DIR, "assets")
 ICON_DIR = os.path.join(ASSETS_DIR, "icons")
+ANIMATION_DIR = os.path.join(ASSETS_DIR, "animations")
 
 # Create a temporary folder for 'becap'
 TEMP_DIR = os.path.join(tempfile.gettempdir(), APP_NAME)
