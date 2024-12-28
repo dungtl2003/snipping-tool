@@ -352,29 +352,38 @@ class SnipperWindow(QMainWindow):
 
     def __handle_upload(self):
         if self.viewer is not None:
-            image = self.viewer.get_image()  # Use the existing get_image() method
-            if image:  # If an image exists
-                # Upload the image
-                byte_array = QByteArray()
-                buffer = QBuffer(byte_array)
-                buffer.open(QBuffer.OpenModeFlag.WriteOnly)
-                image.save(buffer, "PNG")  # QImage has a save method
-                buffer.close()
-                
-                self.__drive_uploader.upload_data(
-                    byte_array,
-                    "screenshot.png",
-                    "image/png"
-                )
-            elif hasattr(self, 'video_recorder') and hasattr(self.video_recorder, 'output_file'):
-                # Upload the video
-                with open(self.video_recorder.output_file, 'rb') as f:
-                    video_data = f.read()
-                    self.__drive_uploader.upload_data(
-                        video_data,
-                        "recording.mp4", 
-                        "video/mp4"
-                    )
+            try:
+                if self.viewer.mode == Mode.IMAGE:
+                    # Handle image upload
+                    image = self.viewer.get_image()
+                    if image:
+                        byte_array = QByteArray()
+                        buffer = QBuffer(byte_array)
+                        buffer.open(QBuffer.OpenModeFlag.WriteOnly)
+                        image.save(buffer, "PNG")
+                        buffer.close()
+                        
+                        self.__drive_uploader.upload_data(
+                            byte_array,
+                            "screenshot.png",
+                            "image/png"
+                        )
+                elif self.viewer.mode == Mode.VIDEO:
+                    # Handle video upload
+                    video_path = getattr(self.video_recorder, 'output_file', None)
+                    if video_path and os.path.exists(video_path):
+                        with open(video_path, 'rb') as f:
+                            video_data = f.read()
+                            self.__drive_uploader.upload_data(
+                                video_data,
+                                "recording.mp4", 
+                                "video/mp4"
+                            )
+                    else:
+                        print("Video file not found or not recorded")
+                        
+            except Exception as e:
+                print(f"Upload failed: {str(e)}")
 
 def run_snipper_window():
     import sys
