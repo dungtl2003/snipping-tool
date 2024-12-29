@@ -55,7 +55,7 @@ You can download the executable for Windows and Linux from the [releases](coming
 - Drag the mouse to select the area you want to take a screenshot of.
 - Press instead of dragging to take a screenshot of the whole screen.
 - Press any key to cancel taking a screenshot.
-- You can scroll the mouse wheel when holding `Ctrl` to zoom in/out the image.
+- You can press zoom in/out icon to zoom in/out the image or press on the zoom number to reset the zoom level to 100%.
 
 #### Record a video
 
@@ -128,3 +128,4 @@ You can download the executable for Windows and Linux from the [releases](coming
 | `Ctrl + P` | Toggle the color picker. |
 | `Ctrl + B` | Toggle the blur. |
 | `Ctrl + U` | Upload the screenshot/video to google drive. |
+| `Ctrl + Scroll` | Zoom in/out the image. |

@@ -8,6 +8,7 @@ from components.copy_btn import CopyButton
 from components.save import SaveButton
 from components.shortcut_blocking import ShortcutBlockable
 from components.upload import ResourceType, UploadButton, UploadResource
+from components.zoom import Zoom
 from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
 import os
 
@@ -71,7 +72,7 @@ class SnipperWindow(QMainWindow):
         icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
         self.setWindowIcon(icon)
 
-        self.viewer = Viewer()
+        self.viewer = Viewer(self.__on_wheel_zoom_event)
 
         self.setFixedSize(450, 100)
         self.is_expand_before = False
@@ -123,6 +124,9 @@ class SnipperWindow(QMainWindow):
 
         self.__set_dynamic_size()
 
+    def __on_wheel_zoom_event(self, zoom: float) -> None:
+        self.__zoom.set_zoom(zoom)
+
     def __set_dynamic_size(self) -> None:
         if (
             self.viewer.mode == Mode.IMAGE
@@ -130,7 +134,7 @@ class SnipperWindow(QMainWindow):
             # Toggle middle section visibility based on window width
             # must hide first to remove widget from layout
             self.__middle_toolbar.show()
-            if self.width() < 600:  # change this number to your desired width
+            if self.width() < 700:  # change this number to your desired width
                 self.__toolbar_top.hide_center_section()
                 self.__toolbar_bottom.show()
             else:
@@ -174,7 +178,9 @@ class SnipperWindow(QMainWindow):
         self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.__middle_toolbar = MiddleToolBar(self.__color_picker_btn, self.__blur_btn)
+        self.__middle_toolbar = MiddleToolBar(
+            self.__color_picker_btn, self.__blur_btn, self.__zoom
+        )
 
         # Toolbar (at the top)
         self.__toolbar_top = TopToolBar(
@@ -216,9 +222,21 @@ class SnipperWindow(QMainWindow):
             self.viewer.get_original_pixmap_coords_from_global,
             self.__add_to_pixmap_history,
         )
+        self.__zoom = Zoom(
+            self.__on_zoom_in_event, self.__on_zoom_out_event, self.__on_reset_event
+        )
         self.__save_btn = SaveButton(self.__on_save_event)
         self.__copy_btn = CopyButton(self.__on_copy_event)
         self.__upload_btn = UploadButton(self.__on_upload_event, self)
+
+    def __on_zoom_in_event(self) -> float:
+        return self.viewer.zoom_pixmap_in()
+
+    def __on_zoom_out_event(self) -> float:
+        return self.viewer.zoom_pixmap_out()
+
+    def __on_reset_event(self) -> float:
+        return self.viewer.reset_zoom()
 
     def __on_save_event(self) -> None:
         if not self.__save_btn.isEnabled():

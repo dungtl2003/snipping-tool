@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QSizePolicy, QToolBar, QWidget
 
 from components.blur import Blur
 from components.upload import UploadButton
+from components.zoom import Zoom
 from utils.styles import qtoolbar_style
 from components.mode_switching import ModeSwitching
 from components.capture import NewCapture
@@ -19,11 +20,7 @@ class BaseToolBar(QToolBar):
 
 
 class MiddleToolBar(BaseToolBar):
-    def __init__(
-        self,
-        eye_dropper: ColorPicker,
-        blur_btn: Blur,
-    ) -> None:
+    def __init__(self, eye_dropper: ColorPicker, blur_btn: Blur, zoom: Zoom) -> None:
         super().__init__()
 
         self.setStyleSheet("QToolBar { padding: 0px; }")
@@ -44,6 +41,7 @@ class MiddleToolBar(BaseToolBar):
         layout.addWidget(eye_dropper)
         layout.addWidget(blur_btn)
         layout.addWidget(right_spacer)
+        layout.addWidget(zoom)
 
         widget = QWidget()
         widget.setLayout(layout)
@@ -73,7 +71,6 @@ class MiddleToolBar(BaseToolBar):
 
 
 class TopToolBar(BaseToolBar):
-    # new     | mode |       eye dropper
     def __init__(
         self,
         new_capture: NewCapture,
@@ -157,11 +154,16 @@ class TopToolBar(BaseToolBar):
         """
         self.__left_toolbar.hide()
 
-    # save copy | upload
+    #  save copy | upload
     def __add_right_section(self):
         self.__right_toolbar = QToolBar()
         self.__right_toolbar.setMovable(False)
         self.__right_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(10, 10)
+        self.__right_toolbar.addWidget(space)
 
         # Save
         self.__right_toolbar.addWidget(self.__save_btn)

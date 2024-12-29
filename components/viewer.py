@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Tuple
+from typing import Callable, Tuple
 from PyQt6.QtCore import QPoint, QPointF
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
@@ -15,10 +15,10 @@ class Mode(Enum):
 
 class Viewer(QWidget):
 
-    def __init__(self) -> None:
+    def __init__(self, on_wheel_zoom_event: Callable[[float], None]) -> None:
         super().__init__()
 
-        self.__image_viewer = ImageViewer()
+        self.__image_viewer = ImageViewer(on_wheel_zoom_event)
         self.__video_player = VideoPlayer()
         self.mode: Mode = Mode.IMAGE
 
@@ -39,6 +39,48 @@ class Viewer(QWidget):
             self.__image_viewer.save()
         elif self.mode == Mode.VIDEO:
             self.__video_player.save()
+
+    def zoom_pixmap_in(self) -> float:
+        """
+        Zoom in the pixmap in the viewer.
+
+        :return: The new zoom level
+        :rtype: float
+        """
+        if self.mode == Mode.IMAGE:
+            return self.__image_viewer.zoom_in()
+        elif self.mode == Mode.VIDEO:
+            raise Exception("Cannot zoom in video")
+
+        raise Exception("Unknown mode")
+
+    def zoom_pixmap_out(self) -> float:
+        """
+        Zoom out the pixmap in the viewer.
+
+        :return: The new zoom level
+        :rtype: float
+        """
+        if self.mode == Mode.IMAGE:
+            return self.__image_viewer.zoom_out()
+        elif self.mode == Mode.VIDEO:
+            raise Exception("Cannot zoom out video")
+
+        raise Exception("Unknown mode")
+
+    def reset_zoom(self) -> float:
+        """
+        Reset the zoom of the pixmap in the viewer.
+
+        :return: The new zoom level
+        :rtype: float
+        """
+        if self.mode == Mode.IMAGE:
+            return self.__image_viewer.reset_zoom()
+        elif self.mode == Mode.VIDEO:
+            raise Exception("Cannot reset zoom in video")
+
+        raise Exception("Unknown mode")
 
     def get_pixmap(self) -> QPixmap | None:
         """
