@@ -137,7 +137,6 @@ class ClipboardManager(QWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
         self.setWindowFlags(Qt.WindowType.Tool)
-        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # Main Layout
         main_layout = QVBoxLayout(self)

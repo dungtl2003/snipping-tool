@@ -17,6 +17,7 @@ A simple snipping tool for Linux and Windows.
 - Have its own clipboard history.
 - Color picker.
 - Blur.
+- Draw on the screenshot.
 - Record video of the selected area (including audio).
 - Save the screenshot/video to a file.
 - Have shortcuts for almost all features.
@@ -88,6 +89,14 @@ You can download the executable for Windows and Linux from the [releases](coming
 - Click on the image to pick the color hex code from that pixel.
 - Press color picker option again to cancel picking color.
 
+#### Draw on the screenshot
+
+- Only available when you have just taken a screenshot.
+- Choose draw option.
+- Choose the color.
+- Drag the mouse to draw on the image.
+- Press draw option again to cancel drawing.
+
 #### Save the screenshot/video
 
 - Press the save button to save the screenshot/video to a file.
@@ -127,5 +136,6 @@ You can download the executable for Windows and Linux from the [releases](coming
 | `Ctrl + Y` | Redo the last editing action. |
 | `Ctrl + P` | Toggle the color picker. |
 | `Ctrl + B` | Toggle the blur. |
+| `Ctrl + D` | Toggle the draw. |
 | `Ctrl + U` | Upload the screenshot/video to google drive. |
 | `Ctrl + Scroll` | Zoom in/out the image. |

@@ -1,10 +1,11 @@
 import time
 from typing import Callable, List, Optional, Tuple
 from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
+from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from components.blur import Blur
 from components.copy_btn import CopyButton
+from components.painter import Painter
 from components.save import SaveButton
 from components.shortcut_blocking import ShortcutBlockable
 from components.upload import ResourceType, UploadButton, UploadResource
@@ -72,8 +73,6 @@ class SnipperWindow(QMainWindow):
         icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
         self.setWindowIcon(icon)
 
-        self.viewer = Viewer(self.__on_wheel_zoom_event)
-
         self.setFixedSize(450, 100)
         self.is_expand_before = False
 
@@ -88,7 +87,10 @@ class SnipperWindow(QMainWindow):
         self.__last_copy_pixmap: QPixmap | None = None
         self.__pixmap_history: PixmapHistory = PixmapHistory()
         self.__current_mode = ModeSwitching.Mode.CAMERA
-        self.__shortcut_blockable_list: List[ShortcutBlockable] = [self.__blur_btn]
+        self.__shortcut_blockable_list: List[ShortcutBlockable] = [
+            self.__blur_btn,
+            self.__painter,
+        ]
 
     def subscribers(
         self,
@@ -104,18 +106,12 @@ class SnipperWindow(QMainWindow):
                 self.__color_picker_btn.handle_mouse_movement,
                 MouseObserver.SubscribeEvent.MOVED,
             ),
-            (
-                self.__blur_btn.handle_mouse_movement,
-                MouseObserver.SubscribeEvent.MOVED,
-            ),
-            (
-                self.__blur_btn.on_mouse_press,
-                MouseObserver.SubscribeEvent.PRESSED,
-            ),
-            (
-                self.__blur_btn.on_mouse_release,
-                MouseObserver.SubscribeEvent.RELEASED,
-            ),
+            (self.__blur_btn.handle_mouse_movement, MouseObserver.SubscribeEvent.MOVED),
+            (self.__blur_btn.on_mouse_press, MouseObserver.SubscribeEvent.PRESSED),
+            (self.__blur_btn.on_mouse_release, MouseObserver.SubscribeEvent.RELEASED),
+            (self.__painter.handle_mouse_movement, MouseObserver.SubscribeEvent.MOVED),
+            (self.__painter.on_mouse_press, MouseObserver.SubscribeEvent.PRESSED),
+            (self.__painter.on_mouse_release, MouseObserver.SubscribeEvent.RELEASED),
         ]
 
     def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
@@ -124,23 +120,26 @@ class SnipperWindow(QMainWindow):
 
         self.__set_dynamic_size()
 
+    def __on_select_color_event(self, color: QColor) -> None:
+        self.__painter.set_color(color)
+
     def __on_wheel_zoom_event(self, zoom: float) -> None:
         self.__zoom.set_zoom(zoom)
 
     def __set_dynamic_size(self) -> None:
         if (
-            self.viewer.mode == Mode.IMAGE
+            self.__viewer.mode == Mode.IMAGE
         ):  # only in image mode we need to toggle the middle section
             # Toggle middle section visibility based on window width
             # must hide first to remove widget from layout
             self.__middle_toolbar.show()
-            if self.width() < 700:  # change this number to your desired width
+            if self.width() < 900:  # change this number to your desired width
                 self.__toolbar_top.hide_center_section()
                 self.__toolbar_bottom.show()
             else:
                 self.__toolbar_bottom.hide()
                 self.__toolbar_top.show_center_section()
-        elif self.viewer.mode == Mode.VIDEO:
+        elif self.__viewer.mode == Mode.VIDEO:
             self.__toolbar_bottom.hide()
             self.__toolbar_top.hide_center_section()
             self.__middle_toolbar.hide()
@@ -158,9 +157,9 @@ class SnipperWindow(QMainWindow):
         else:
             self.__set_dynamic_size()
 
-        if self.viewer.mode == Mode.VIDEO:
+        if self.__viewer.mode == Mode.VIDEO:
             self.__copy_btn.disable()
-        elif self.viewer.mode == Mode.IMAGE:
+        elif self.__viewer.mode == Mode.IMAGE:
             self.__copy_btn.enable()
 
         self.show()
@@ -179,7 +178,7 @@ class SnipperWindow(QMainWindow):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
         self.__middle_toolbar = MiddleToolBar(
-            self.__color_picker_btn, self.__blur_btn, self.__zoom
+            self.__color_picker_btn, self.__blur_btn, self.__zoom, self.__painter
         )
 
         # Toolbar (at the top)
@@ -192,7 +191,7 @@ class SnipperWindow(QMainWindow):
             self.__upload_btn,
         )
         # Main section
-        self.viewer.setVisible(True)
+        self.__viewer.setVisible(True)
         # Toolbar (at the bottom)
         self.__toolbar_bottom = BottomToolBar(self.__middle_toolbar)
 
@@ -200,7 +199,7 @@ class SnipperWindow(QMainWindow):
         self.main_layout.addWidget(
             self.__toolbar_top, alignment=Qt.AlignmentFlag.AlignTop
         )
-        self.main_layout.addWidget(self.viewer)
+        self.main_layout.addWidget(self.__viewer)
         self.main_layout.addWidget(
             self.__toolbar_bottom, alignment=Qt.AlignmentFlag.AlignBottom
         )
@@ -210,16 +209,26 @@ class SnipperWindow(QMainWindow):
         Init the functions.
         :return: None
         """
+        self.__viewer = Viewer(self.__on_wheel_zoom_event, self.__on_select_color_event)
         self.__new_capture_btn = NewCapture(
             self.__on_pre_capture_event, self.__on_post_capture_event
         )
         self.__mode_switching = ModeSwitching()
-        self.__color_picker_btn = ColorPicker(self.viewer)
+        self.__color_picker_btn = ColorPicker(self.__viewer)
         self.__blur_btn = Blur(
-            self.viewer.get_pixmap,
-            self.viewer.is_in_pixmap_bound,
-            self.viewer.set_pixmap,
-            self.viewer.get_original_pixmap_coords_from_global,
+            self.__viewer.get_pixmap,
+            self.__viewer.is_in_pixmap_bound,
+            self.__viewer.set_pixmap,
+            self.__viewer.get_original_pixmap_coords_from_global,
+            self.__add_to_pixmap_history,
+        )
+        self.__painter = Painter(
+            self.__viewer.toggle_palette,
+            self.__viewer.hide_palette,
+            self.__viewer.get_pixmap,
+            self.__viewer.is_in_pixmap_bound,
+            self.__viewer.set_pixmap,
+            self.__viewer.get_original_pixmap_coords_from_global,
             self.__add_to_pixmap_history,
         )
         self.__zoom = Zoom(
@@ -230,25 +239,25 @@ class SnipperWindow(QMainWindow):
         self.__upload_btn = UploadButton(self.__on_upload_event, self)
 
     def __on_zoom_in_event(self) -> float:
-        return self.viewer.zoom_pixmap_in()
+        return self.__viewer.zoom_pixmap_in()
 
     def __on_zoom_out_event(self) -> float:
-        return self.viewer.zoom_pixmap_out()
+        return self.__viewer.zoom_pixmap_out()
 
     def __on_reset_event(self) -> float:
-        return self.viewer.reset_zoom()
+        return self.__viewer.reset_zoom()
 
     def __on_save_event(self) -> None:
         if not self.__save_btn.isEnabled():
             return
 
-        self.viewer.save()
+        self.__viewer.save()
 
     def __on_copy_event(self) -> None:
         if not self.__copy_btn.isEnabled():
             return
 
-        pixmap = self.viewer.get_pixmap()
+        pixmap = self.__viewer.get_pixmap()
         if pixmap is None:
             return
 
@@ -276,7 +285,7 @@ class SnipperWindow(QMainWindow):
         if self.is_expand_before and self.__current_mode == ModeSwitching.Mode.CAMERA:
             current_pixmap = self.__pixmap_history.get_current_pixmap()
             if current_pixmap is not None:
-                self.viewer.set_pixmap(current_pixmap)
+                self.__viewer.set_pixmap(current_pixmap)
 
         time.sleep(0.2)  # wait for main screen to hide
 
@@ -293,13 +302,13 @@ class SnipperWindow(QMainWindow):
 
         if self.__mode_switching.mode() == ModeSwitching.Mode.CAMERA:
             self.__current_mode = ModeSwitching.Mode.CAMERA
-            self.viewer.set_mode(Mode.IMAGE)
-            self.viewer.set_pixmap(capture_pixmap)
+            self.__viewer.set_mode(Mode.IMAGE)
+            self.__viewer.set_pixmap(capture_pixmap)
             self.__add_to_pixmap_history(capture_pixmap)
             self.__show_with_expand()
         elif self.__mode_switching.mode() == ModeSwitching.Mode.VIDEO:
             self.__current_mode = ModeSwitching.Mode.VIDEO
-            self.viewer.set_mode(Mode.VIDEO)
+            self.__viewer.set_mode(Mode.VIDEO)
 
             self.__video_recorder = VideoRecorder(
                 capture_area, self.__on_post_video_recording_event
@@ -307,7 +316,7 @@ class SnipperWindow(QMainWindow):
             self.__video_recorder.start_recording()
 
     def __on_post_video_recording_event(self) -> None:
-        self.viewer.set_video(self.__video_recorder.video_file_path)
+        self.__viewer.set_video(self.__video_recorder.video_file_path)
         self.__show_with_expand()
 
     def __setup_shortcut(self):
@@ -334,6 +343,8 @@ class SnipperWindow(QMainWindow):
         shortcut.activated.connect(self.__on_blur_action)
         shortcut = QShortcut(QKeySequence("Ctrl+U"), self)
         shortcut.activated.connect(self.__on_upload_action)
+        shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
+        shortcut.activated.connect(self.__on_paint_action)
 
     def __can_shortcut(self) -> bool:
         return all(
@@ -351,6 +362,12 @@ class SnipperWindow(QMainWindow):
             return
 
         self.__blur_btn.toggle()
+
+    def __on_paint_action(self) -> None:
+        if not self.__can_shortcut():
+            return
+
+        self.__painter.toggle()
 
     def __on_pick_color_action(self) -> None:
         if not self.__can_shortcut():
@@ -382,7 +399,7 @@ class SnipperWindow(QMainWindow):
 
         pixmap = self.__pixmap_history.undo()
         if pixmap is not None:
-            self.viewer.set_pixmap(pixmap)
+            self.__viewer.set_pixmap(pixmap)
 
     def __on_redo_action(self) -> None:
         if not self.__can_shortcut():
@@ -390,17 +407,17 @@ class SnipperWindow(QMainWindow):
 
         pixmap = self.__pixmap_history.redo()
         if pixmap is not None:
-            self.viewer.set_pixmap(pixmap)
+            self.__viewer.set_pixmap(pixmap)
 
     def __on_upload_event(self) -> UploadResource:
         self.__deactivate_utilities()
-        if self.viewer.mode == Mode.IMAGE:
-            image = self.viewer.get_pixmap()
+        if self.__viewer.mode == Mode.IMAGE:
+            image = self.__viewer.get_pixmap()
             assert image is not None
             image = image.toImage()
             return UploadResource(ResourceType.IMAGE, image=image)
-        elif self.viewer.mode == Mode.VIDEO:
-            video_path = self.viewer.get_video_path()
+        elif self.__viewer.mode == Mode.VIDEO:
+            video_path = self.__viewer.get_video_path()
             return UploadResource(ResourceType.VIDEO, video_url=video_path)
 
         raise ValueError("Invalid mode")
@@ -411,7 +428,9 @@ class SnipperWindow(QMainWindow):
     def __deactivate_utilities(self) -> None:
         self.__blur_btn.deactivate()
         self.__color_picker_btn.deactivate()
+        self.__painter.deactivate()
         self.__blur_btn.unblock()
+        self.__painter.unblock()
 
 
 def run_snipper_window():

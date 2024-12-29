@@ -1,10 +1,11 @@
 from enum import Enum
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 from PyQt6.QtCore import QPoint, QPointF
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QColor, QImage, QPixmap, QResizeEvent
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from components.image_viewer import ImageViewer
+from components.painter import ColorPalette
 from components.video_player import VideoPlayer
 
 
@@ -15,7 +16,11 @@ class Mode(Enum):
 
 class Viewer(QWidget):
 
-    def __init__(self, on_wheel_zoom_event: Callable[[float], None]) -> None:
+    def __init__(
+        self,
+        on_wheel_zoom_event: Callable[[float], None],
+        on_select_color: Callable[[QColor], None],
+    ) -> None:
         super().__init__()
 
         self.__image_viewer = ImageViewer(on_wheel_zoom_event)
@@ -26,8 +31,40 @@ class Viewer(QWidget):
         layout.addWidget(self.__image_viewer)
         layout.addWidget(self.__video_player)
         self.setLayout(layout)
+        self.color_palette = ColorPalette(self, on_select_color)
 
         self.set_mode(Mode.IMAGE)
+
+    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
+        self.color_palette.move_to_top_middle()
+        self.color_palette.update()
+
+    def hide_palette(self) -> None:
+        """
+        Hide the color palette.
+
+        :return: None
+        """
+        self.color_palette.hide()
+
+    def show_palette(self) -> None:
+        """
+        Show the color palette.
+
+        :return: None
+        """
+        self.color_palette.show()
+
+    def toggle_palette(self) -> None:
+        """
+        Toggle the color palette visibility.
+
+        :return: None
+        """
+        if self.color_palette.isVisible():
+            self.color_palette.hide()
+        else:
+            self.color_palette.show()
 
     def save(self):
         """

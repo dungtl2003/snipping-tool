@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QHBoxLayout, QSizePolicy, QToolBar, QWidget
 
 from components.blur import Blur
+from components.painter import Painter
 from components.upload import UploadButton
 from components.zoom import Zoom
 from utils.styles import qtoolbar_style
@@ -20,7 +21,9 @@ class BaseToolBar(QToolBar):
 
 
 class MiddleToolBar(BaseToolBar):
-    def __init__(self, eye_dropper: ColorPicker, blur_btn: Blur, zoom: Zoom) -> None:
+    def __init__(
+        self, eye_dropper: ColorPicker, blur_btn: Blur, zoom: Zoom, painter: Painter
+    ) -> None:
         super().__init__()
 
         self.setStyleSheet("QToolBar { padding: 0px; }")
@@ -40,6 +43,7 @@ class MiddleToolBar(BaseToolBar):
         layout.addWidget(left_spacer)
         layout.addWidget(eye_dropper)
         layout.addWidget(blur_btn)
+        layout.addWidget(painter)
         layout.addWidget(right_spacer)
         layout.addWidget(zoom)
 
@@ -49,9 +53,20 @@ class MiddleToolBar(BaseToolBar):
 
         self.__eye_dropper = eye_dropper
         self.__blur_btn = blur_btn
+        self.__painter = painter
 
         self.__eye_dropper.toggled.connect(self.__on_eye_dropper_toggled)
         self.__blur_btn.toggled.connect(self.__on_blur_toggled)
+        self.__painter.toggled.connect(self.__on_paint_toggled)
+
+    def __on_paint_toggled(self) -> None:
+        """
+        Handle the paint toggled.
+        :return: None
+        """
+        if self.__painter.isChecked():
+            self.__eye_dropper.deactivate()
+            self.__blur_btn.deactivate()
 
     def __on_eye_dropper_toggled(self) -> None:
         """
@@ -60,6 +75,7 @@ class MiddleToolBar(BaseToolBar):
         """
         if self.__eye_dropper.isChecked():
             self.__blur_btn.deactivate()
+            self.__painter.deactivate()
 
     def __on_blur_toggled(self) -> None:
         """
@@ -68,6 +84,7 @@ class MiddleToolBar(BaseToolBar):
         """
         if self.__blur_btn.isChecked():
             self.__eye_dropper.deactivate()
+            self.__painter.deactivate()
 
 
 class TopToolBar(BaseToolBar):
@@ -162,7 +179,7 @@ class TopToolBar(BaseToolBar):
 
         # Space
         space = QWidget()
-        space.setFixedSize(10, 10)
+        space.setFixedSize(30, 30)
         self.__right_toolbar.addWidget(space)
 
         # Save
@@ -233,6 +250,11 @@ class TopToolBar(BaseToolBar):
         left_widget = QWidget()
         left_widget.setLayout(left_layout)
         self.addWidget(left_widget)
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(30, 30)
+        self.__left_toolbar.addWidget(space)
 
 
 class BottomToolBar(BaseToolBar):

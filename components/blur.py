@@ -176,7 +176,6 @@ class Blur(QPushButton, ShortcutBlockable):
         if self.__selection_start.isNull():
             return
 
-        pixmap = self.__original_pixmap.copy()
         end_pos = self.__map_to_pixmap(a0.globalPosition())
         if end_pos is None:
             return
@@ -187,6 +186,7 @@ class Blur(QPushButton, ShortcutBlockable):
             self.__selection_start, self.__selection_end
         ).normalized()
 
+        pixmap = self.__original_pixmap.copy()
         painter = QPainter(pixmap)
         painter.setPen(QColor(255, 255, 255))
         painter.setBrush(
