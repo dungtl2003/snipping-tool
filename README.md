@@ -76,7 +76,7 @@ pip install -r requirements.txt
 
 4. Run the app:
 ``` bash
-python main.py
+make run_dev
 ```
 
 ### Usage

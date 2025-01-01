@@ -9,7 +9,7 @@ VENV_CHECK = $(shell if [ ! -d "$(ENV_DIR)" ]; then echo "not_exists"; fi)
 gen_script_linux:
 	@echo "Generating script"
 	$(ROOT_DIR)/scripts/create_env.sh
-	. $(PYTHON) && pip install -r requirements.txt && pyinstaller --onefile --add-data "assets/icons:assets/icons" --add-data "assets/animations:assets/animations" --add-data "credentials.json:." --name Becap --windowed main.py
+	. $(PYTHON) && pip install -r requirements.txt && pyinstaller --onefile --add-data "assets/icons:assets/icons" --add-data "assets/animations:assets/animations" --name Becap --windowed main.py
 
 clean_linux: uninstall_linux
 	echo "Cleaning up"
@@ -25,6 +25,7 @@ build_app_linux:
 	mkdir -p $(HOME)/.local/share/icons/hicolor/32x32/apps
 	mkdir -p $(HOME)/.local/share/icons/hicolor/16x16/apps
 	mkdir -p $(HOME)/.local/share/applications
+	mkdir -p $(HOME)/.local/share/Becap
 
 	echo "Copying icons and desktop file"
 	cp assets/256x256/scissor.png $(HOME)/.local/share/icons/hicolor/256x256/apps/Becap.png
@@ -34,6 +35,9 @@ build_app_linux:
 	cp assets/16x16/scissor.png $(HOME)/.local/share/icons/hicolor/16x16/apps/Becap.png
 	cp Becap.desktop $(HOME)/.local/share/applications/Becap.desktop
 	cp dist/Becap $(HOME)/.local/bin/Becap
+
+	echo "Copying credentials"
+	cp credentials.json $(HOME)/.local/share/Becap/credentials.json
 
 	echo "Setting permissions"
 	chmod +x $(HOME)/.local/bin/Becap
@@ -53,6 +57,11 @@ uninstall_linux:
 	rm -f $(HOME)/.local/share/icons/hicolor/32x32/apps/Becap.png
 	rm -f $(HOME)/.local/share/icons/hicolor/16x16/apps/Becap.png
 	rm -f $(HOME)/.local/share/applications/Becap.desktop
+	rm -rf $(HOME)/.local/share/Becap
 
 	echo "Updating desktop database"
 	update-desktop-database $(HOME)/.local/share/applications
+
+run_dev: 
+	$(ROOT_DIR)/scripts/create_env.sh
+	. $(PYTHON) && ENV=dev python main.py

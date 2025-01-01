@@ -162,7 +162,7 @@ class VideoPlayer(QWidget):
 
         saved_time = time.strftime("%Y%m%d%H%M%S")
         video_path = os.path.join(BECAP_VIDEO_PATH, f"becap_video_{saved_time}.mp4")
-        shutil.move(self.__video_path, video_path)
+        shutil.copy(self.__video_path, video_path)
 
     def set_video(self, video_path: str) -> None:
         """
