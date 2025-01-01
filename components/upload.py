@@ -247,12 +247,8 @@ class DriveFolderPicker(QDialog):
         self.tree.addTopLevelItem(root_item)
 
     def __load_subfolders(self, parent_item: QTreeWidgetItem):
-        # Remove placeholder if exists
-        if parent_item.childCount() == 1:
-            item = parent_item.child(0)
-            assert item is not None
-            if item.text(0) == "":
-                parent_item.removeChild(item)
+        # Remove all existing children
+        parent_item.takeChildren()
 
         folder_data = parent_item.data(0, Qt.ItemDataRole.UserRole)
         parent_id = folder_data["id"]
@@ -279,8 +275,9 @@ class DriveFolderPicker(QDialog):
                     Qt.ItemDataRole.UserRole,
                     {"id": folder["id"], "path": folder_path},
                 )
-                # Add placeholder child to show expand arrow
-                QTreeWidgetItem(item)
+                # Add placeholder child to show expand arrow only if we haven't loaded children yet
+                if not item.childCount():
+                    QTreeWidgetItem(item)
 
         except Exception as e:
             CustomCriticalDialog(
@@ -292,12 +289,94 @@ class DriveFolderPicker(QDialog):
         self.selected_folder_id = folder_data["id"]
         self.selected_path = folder_data["path"]
 
+class AuthenticationHandler(QThread):
+    auth_completed = pyqtSignal(Credentials)
+    auth_error = pyqtSignal(Message)
+    
+    def __init__(self, scopes: List[str], cred_path: str, token_path: str):
+        super().__init__()
+        self.scopes = scopes
+        self.cred_path = cred_path
+        self.token_path = token_path
+        self.timeout = 180  # 3 minutes timeout
+
+    def run(self):
+        try:
+            credentials = None
+            if os.path.exists(self.token_path):
+                with open(self.token_path, "r") as token:
+                    credentials = Credentials.from_authorized_user_file(
+                        self.token_path, self.scopes
+                    )
+
+            if not credentials or not credentials.valid:
+                if credentials and credentials.expired and credentials.refresh_token:
+                    credentials.refresh(Request())
+                else:
+                    if not os.path.exists(self.cred_path):
+                        self.auth_error.emit(Message(
+                            "Configuration Error",
+                            f"Missing {self.cred_path}. Please obtain it from Google Cloud Console."
+                        ))
+                        return
+
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.cred_path, self.scopes
+                    )
+                    
+                    # Run with timeout
+                    import threading
+                    auth_event = threading.Event()
+                    auth_result = {"credentials": None, "error": None}
+
+                    def auth_thread():
+                        try:
+                            auth_result["credentials"] = flow.run_local_server(port=0)
+                            auth_event.set()
+                        except Exception as e:
+                            auth_result["error"] = str(e)
+                            auth_event.set()
+
+                    thread = threading.Thread(target=auth_thread)
+                    thread.daemon = True
+                    thread.start()
+
+                    # Wait with timeout
+                    if not auth_event.wait(timeout=self.timeout):
+                        self.auth_error.emit(Message(
+                            "Authentication Error",
+                            "Authentication timed out. Please try again."
+                        ))
+                        return
+
+                    if auth_result["error"]:
+                        self.auth_error.emit(Message(
+                            "Authentication Error",
+                            f"Failed to authenticate: {auth_result['error']}"
+                        ))
+                        return
+
+                    credentials = auth_result["credentials"]
+
+                with open(self.token_path, "w") as token:
+                    token.write(credentials.to_json())
+
+            self.auth_completed.emit(credentials)
+            
+        except Exception as e:
+            self.auth_error.emit(Message(
+                "Authentication Error",
+                f"Failed to authenticate: {str(e)}"
+            ))
 
 class DriveUploader:
     SCOPES: List[str] = ["https://www.googleapis.com/auth/drive"]
 
     def __init__(self):
         self.__upload_worker: Optional[UploadWorker] = None
+        self.__auth_handler: Optional[AuthenticationHandler] = None
+        # Store callbacks for later use
+        self.__pending_upload = None
 
     def upload_data(
         self,
@@ -310,68 +389,66 @@ class DriveUploader:
         on_upload_error: Callable[[Message], None],
         parent: Optional[QWidget] = None,
     ) -> None:
-        credentials, error = self.__load_credentials()
-        if not credentials:
-            on_upload_error(error)
+        # Store upload parameters for later use after authentication
+        self.__pending_upload = {
+            'data': data,
+            'filename': filename,
+            'mime_type': mime_type,
+            'on_cancel_upload': on_cancel_upload,
+            'on_uploading': on_uploading,
+            'on_upload_complete': on_upload_complete,
+            'on_upload_error': on_upload_error,
+            'parent': parent
+        }
+        
+        # Start authentication process
+        self.__start_authentication()
+
+    def __start_authentication(self):
+        self.__auth_handler = AuthenticationHandler(self.SCOPES, CRED_PATH, TOKEN_PATH)
+        self.__auth_handler.auth_completed.connect(self.__on_auth_completed)
+        self.__auth_handler.auth_error.connect(self.__on_auth_error)
+        self.__auth_handler.start()
+        
+    def __on_auth_completed(self, credentials: Credentials):
+        if not self.__pending_upload:
             return
 
-        service = build("drive", "v3", credentials=credentials)
-
-        folder_picker = DriveFolderPicker(service, parent)
-        if folder_picker.exec() != QDialog.DialogCode.Accepted:
-            on_cancel_upload()
-            return
-
-        self.__start_upload(
-            service,
-            data,
-            filename,
-            mime_type,
-            folder_picker.selected_folder_id,
-            on_uploading,
-            on_upload_complete,
-            on_upload_error,
-        )
-
-    def __load_credentials(
-        self,
-    ) -> Tuple[Credentials | None, Message]:  # (credentials, error_message)
         try:
-            credentials = None
-            if os.path.exists(TOKEN_PATH):
-                with open(TOKEN_PATH, "r") as token:
-                    credentials = Credentials.from_authorized_user_file(
-                        TOKEN_PATH, self.SCOPES
-                    )
+            service = build("drive", "v3", credentials=credentials)
+            
+            folder_picker = DriveFolderPicker(
+                service, 
+                self.__pending_upload['parent']
+            )
+            
+            if folder_picker.exec() != QDialog.DialogCode.Accepted:
+                self.__pending_upload['on_cancel_upload']()
+                return
 
-            if not credentials or not credentials.valid:
-                if credentials and credentials.expired and credentials.refresh_token:
-                    credentials.refresh(Request())
-                else:
-                    if not os.path.exists(CRED_PATH):
-                        return (
-                            None,
-                            Message(
-                                "Configuration Error",
-                                f"Missing {CRED_PATH}. Please obtain it from Google Cloud Console.",
-                            ),
-                        )
-
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        CRED_PATH, self.SCOPES
-                    )
-
-                    cred = flow.run_local_server(port=0)
-                    assert isinstance(cred, Credentials)
-                    credentials = cred
-
-                with open(TOKEN_PATH, "w") as token:
-                    token.write(credentials.to_json())
-
-            return credentials, Message.dummy()
+            self.__start_upload(
+                service,
+                self.__pending_upload['data'],
+                self.__pending_upload['filename'],
+                self.__pending_upload['mime_type'],
+                folder_picker.selected_folder_id,
+                self.__pending_upload['on_uploading'],
+                self.__pending_upload['on_upload_complete'],
+                self.__pending_upload['on_upload_error'],
+            )
         except Exception as e:
-            print("Error: ", str(e))
-            return None, Message("Authentication Error", "Failed to authenticate user")
+            if self.__pending_upload['on_upload_error']:
+                self.__pending_upload['on_upload_error'](
+                    Message("Error", f"Failed to initialize upload: {str(e)}")
+                )
+        finally:
+            # Clear pending upload data
+            self.__pending_upload = None
+
+    def __on_auth_error(self, error: Message):
+        if self.__pending_upload and self.__pending_upload['on_upload_error']:
+            self.__pending_upload['on_upload_error'](error)
+        self.__pending_upload = None
 
     def __start_upload(
         self,
