@@ -298,7 +298,7 @@ class AuthenticationHandler(QThread):
         self.scopes = scopes
         self.cred_path = cred_path
         self.token_path = token_path
-        self.timeout = 180  # 3 minutes timeout
+        self.timeout = 300  # 5 minutes timeout
 
     def run(self):
         try:
