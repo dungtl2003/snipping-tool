@@ -1,7 +1,7 @@
 import time
 from typing import Callable, List, Optional, Tuple
 from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPixmap, QResizeEvent, QShortcut
+from PyQt6.QtGui import QColor, QKeySequence, QPixmap, QResizeEvent, QShortcut
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from components.blur import Blur
 from components.copy_btn import CopyButton
@@ -10,7 +10,7 @@ from components.save import SaveButton
 from components.shortcut_blocking import ShortcutBlockable
 from components.upload import ResourceType, UploadButton, UploadResource
 from components.zoom import Zoom
-from preload import BECAP_CLIPBOARD_MANAGER_PATH, ICON_DIR, APP_NAME
+from preload import BECAP_CLIPBOARD_MANAGER_PATH, APP_NAME
 import os
 
 from components.mouse_observer import MouseObserver
@@ -21,8 +21,6 @@ from components.mode_switching import ModeSwitching
 from components.video_recorder import VideoRecorder
 from components.viewer import Viewer, Mode
 from utils.styles import styles
-
-APP_ICON = os.path.join(ICON_DIR, "scissors.svg")
 
 
 class PixmapHistory:
@@ -68,10 +66,6 @@ class SnipperWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(APP_NAME)
-        # Not working
-        icon = QIcon()
-        icon.addPixmap(QPixmap(APP_ICON), QIcon.Mode.Selected, QIcon.State.On)
-        self.setWindowIcon(icon)
 
         self.setFixedSize(450, 100)
         self.is_expand_before = False

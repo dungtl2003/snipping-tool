@@ -21,7 +21,7 @@ from googleapiclient.discovery import build
 
 from components.message_dialog import CustomInformationDialog, CustomCriticalDialog
 from components.loading_dialog import LoadingDialog
-from preload import ICON_DIR
+from preload import ICON_DIR, TOKEN_PATH, CRED_PATH
 
 UPLOAD_ICON = os.path.join(ICON_DIR, "upload.svg")
 DRIVE_ICON = os.path.join(ICON_DIR, "drive.svg")
@@ -144,6 +144,7 @@ class CloudUploader(QDialog):
             QIcon(DRIVE_ICON), "Upload to Google Drive"
         )
         self.__drive_upload_btn.clicked.connect(self.__on_drive_upload)
+        self.__loading_dialog = None
 
         layout.addWidget(self.__drive_upload_btn)
 
@@ -294,8 +295,6 @@ class DriveFolderPicker(QDialog):
 
 class DriveUploader:
     SCOPES: List[str] = ["https://www.googleapis.com/auth/drive"]
-    TOKEN_FILE: str = "token.json"
-    CREDENTIALS_FILE: str = "credentials.json"
 
     def __init__(self):
         self.__upload_worker: Optional[UploadWorker] = None
@@ -339,39 +338,40 @@ class DriveUploader:
     ) -> Tuple[Credentials | None, Message]:  # (credentials, error_message)
         try:
             credentials = None
-            if os.path.exists(self.TOKEN_FILE):
-                with open(self.TOKEN_FILE, "r") as token:
+            if os.path.exists(TOKEN_PATH):
+                with open(TOKEN_PATH, "r") as token:
                     credentials = Credentials.from_authorized_user_file(
-                        self.TOKEN_FILE, self.SCOPES
+                        TOKEN_PATH, self.SCOPES
                     )
 
             if not credentials or not credentials.valid:
                 if credentials and credentials.expired and credentials.refresh_token:
                     credentials.refresh(Request())
                 else:
-                    if not os.path.exists(self.CREDENTIALS_FILE):
+                    if not os.path.exists(CRED_PATH):
                         return (
                             None,
                             Message(
                                 "Configuration Error",
-                                f"Missing {self.CREDENTIALS_FILE}. Please obtain it from Google Cloud Console.",
+                                f"Missing {CRED_PATH}. Please obtain it from Google Cloud Console.",
                             ),
                         )
 
                     flow = InstalledAppFlow.from_client_secrets_file(
-                        self.CREDENTIALS_FILE, self.SCOPES
+                        CRED_PATH, self.SCOPES
                     )
 
                     cred = flow.run_local_server(port=0)
                     assert isinstance(cred, Credentials)
                     credentials = cred
 
-                with open(self.TOKEN_FILE, "w") as token:
+                with open(TOKEN_PATH, "w") as token:
                     token.write(credentials.to_json())
 
             return credentials, Message.dummy()
         except Exception as e:
-            return None, Message("Authentication Error", str(e))
+            print("Error: ", str(e))
+            return None, Message("Authentication Error", "Failed to authenticate user")
 
     def __start_upload(
         self,
@@ -482,5 +482,6 @@ class UploadWorker(QThread):
             )
             self.upload_completed.emit(message)
         except Exception as e:
-            message = Message("Error", str(e))
+            print("Error", str(e))
+            message = Message("Error", "Uploaded failed")
             self.upload_error.emit(message)

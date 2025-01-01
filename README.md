@@ -6,8 +6,9 @@ A simple snipping tool for Linux and Windows.
 
 - [Features](#features)
 - [Installation](#installation)
-  - [Build from source](#build-from-source)
-  - [Download the executable](#download-the-executable)
+    - [Linux](#linux)
+    - [Windows](#windows)
+- [For developers](#for-developers)
 - [Usage](#usage)
 
 ### Features
@@ -25,28 +26,58 @@ A simple snipping tool for Linux and Windows.
 
 ### Installation
 
-#### Build from source
+Pre-requisite:
+- You need to have `ffmpeg` installed on your machine to record video. You can download it [here](https://ffmpeg.org/download.html).
+- You need to have `xdotool` installed on your machine to simulate keyboard and mouse input.
+- You need to have `xclip` installed on your machine to copy the screenshot to the clipboard.
+- You need to have python 3.10 installed on your machine. You can download it [here](https://www.python.org/downloads/).
 
-You need to have python 3.10 installed on your machine.
-
-1. Clone this repo:
+Clone this repo:
 ``` bash
 git clone git@github.com:dungtl2003/snipping-tool.git
 ```
 
-2. Install needed packages:
+#### Linux
+
+Warning: Currently, this app only supports on Xorg display server. The Wayland display server is not supported yet.
+
+Run the following command in the terminal:
+
+``` bash
+make install_linux
+```
+
+Uninstall the app:
+
+``` bash
+make uninstall_linux
+```
+
+#### Windows
+
+Comming soon...
+
+### For developers
+
+1. Create a virtual environment:
+``` bash
+python -m venv venv
+```
+
+2. Activate the virtual environment:
+``` bash
+source venv/bin/activate
+```
+
+3. Install needed packages:
 ``` bash
 pip install -r requirements.txt
 ```
 
-3. Run the app:
+4. Run the app:
 ``` bash
 python main.py
 ```
-
-#### Download the executable
-
-You can download the executable for Windows and Linux from the [releases](coming soon) page.
 
 ### Usage
 
@@ -94,7 +125,8 @@ You can download the executable for Windows and Linux from the [releases](coming
 - Only available when you have just taken a screenshot.
 - Choose draw option.
 - Choose the color.
-- Drag the mouse to draw on the image.
+- Left-click and drag the mouse to draw on the image.
+- Right-click to toggle the color selection dialog.
 - Press draw option again to cancel drawing.
 
 #### Save the screenshot/video

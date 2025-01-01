@@ -163,3 +163,9 @@ cython_debug/
 
 credentials.json
 token.json
+
+# flatpak
+build
+build-dir
+becap-repo
+.flatpak-builder

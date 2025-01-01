@@ -122,11 +122,13 @@ def resolve_app_data_path():
 
 resolve_path()
 
-APP_NAME = "becap"
+APP_NAME = "Becap"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(ROOT_DIR, "assets")
 ICON_DIR = os.path.join(ASSETS_DIR, "icons")
 ANIMATION_DIR = os.path.join(ASSETS_DIR, "animations")
+CRED_PATH = os.path.join(ROOT_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(ROOT_DIR, "token.json")
 
 # Create a temporary folder for 'becap'
 TEMP_DIR = os.path.join(tempfile.gettempdir(), APP_NAME)
