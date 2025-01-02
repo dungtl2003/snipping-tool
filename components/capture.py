@@ -1,4 +1,5 @@
 from __future__ import annotations
+from enum import Enum
 from typing import Callable, Optional, Tuple
 
 from PyQt6 import QtGui
@@ -14,6 +15,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QPushButton, QWidget
 
 from components.utils import (
+    get_focus_screen_geometry,
     set_cross_cursor,
     set_normal_cursor,
     capture_all_screens_mss,
@@ -47,6 +49,16 @@ class NewCapture(QPushButton):
         self.capturer = SnapshotOverlay(self.__on_post_capture)
 
 
+class CaptureMode(Enum):
+    """
+    If user only clicks, the whole screen is captured.
+    If user clicks and drags, the area is captured.
+    """
+
+    AREA = 1
+    SCREEN = 2
+
+
 class SnapshotOverlay(QWidget):
     def __init__(
         self,
@@ -71,6 +83,7 @@ class SnapshotOverlay(QWidget):
         self.__screen_pixmap = capture_all_screens_mss()
         self.__selection_start = QPoint()
         self.__selection_rect = QRect()
+        self.__capture_mode = CaptureMode.SCREEN
 
         self.setGeometry(self.__full_geometry)
         self.showFullScreen()
@@ -114,6 +127,7 @@ class SnapshotOverlay(QWidget):
         assert a0 is not None
 
         if not self.__selection_start.isNull():
+            self.__capture_mode = CaptureMode.AREA
             # Update the selection rectangle based on mouse position
             self.__selection_rect = QRect(
                 self.__selection_start, a0.globalPosition().toPoint()
@@ -125,10 +139,14 @@ class SnapshotOverlay(QWidget):
 
         if a0.button() == Qt.MouseButton.LeftButton:
             self.close()
-            # Extract the selected region from the combined pixmap
-            capture_area = QRect(
-                self.__selection_rect.topLeft(), self.__selection_rect.size()
-            )
+            capture_area = QRect()
+            if self.__capture_mode == CaptureMode.SCREEN:
+                capture_area = get_focus_screen_geometry()
+            elif self.__capture_mode == CaptureMode.AREA:
+                capture_area = QRect(
+                    self.__selection_rect.topLeft(), self.__selection_rect.size()
+                )
+
             capture_pixmap = self.__screen_pixmap.copy(
                 capture_area.translated(-self.__full_geometry.topLeft())
             )

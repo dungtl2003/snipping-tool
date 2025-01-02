@@ -1,3 +1,4 @@
+from enum import Enum
 import time
 from os import error
 from typing import Callable, Optional, Tuple
@@ -15,13 +16,20 @@ from ffmpeg.nodes import os
 from preload import BECAP_PICTURE_PATH
 
 
+class ZoomState(Enum):
+    IN = 1
+    OUT = 2
+    RESET = 3
+
+
 class ImageViewer(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, on_wheel_zoom_event: Callable[[float], None]) -> None:
         super().__init__()
 
         self.scroll_area = ScrollArea(self, self.__on_wheel_event)
         self.label = ImageLabel(self.scroll_area)
         self.scroll_area.setWidget(self.label)
+        self.__on_wheel_zoom_event = on_wheel_zoom_event
 
         lay = QVBoxLayout(self)
         self.setLayout(lay)
@@ -29,7 +37,7 @@ class ImageViewer(QWidget):
         lay.addWidget(self.scroll_area)
 
     def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
-        self.label.update_image_display(None)
+        self.label.update_image_display()
 
     def save(self) -> None:
         """
@@ -110,14 +118,47 @@ class ImageViewer(QWidget):
 
         delta = a0.angleDelta().y()
         if a0.modifiers() == Qt.KeyboardModifier.ControlModifier:  # Ctrl + Scroll
-            self.__zoom(delta)
+            state = None
+            if delta is not None and delta > 0:  # Scroll up
+                state = ZoomState.IN
+            elif delta is not None:  # Scroll down
+                state = ZoomState.OUT
+
+            assert state is not None
+            new_zoom = self.__zoom(state)
+            self.__on_wheel_zoom_event(new_zoom)
         else:  # Scroll
             self.__scroll(delta)
 
-    def __zoom(self, delta: int) -> None:
+    def zoom_in(self) -> float:
+        """
+        Zoom in the image.
+        :return: the new zoom factor
+        :rtype: float
+        """
+        return self.__zoom(ZoomState.IN)
+
+    def zoom_out(self) -> float:
+        """
+        Zoom out the image.
+        :return: the new zoom factor
+        :rtype: float
+        """
+        return self.__zoom(ZoomState.OUT)
+
+    def reset_zoom(self) -> float:
+        """
+        Reset the zoom.
+        :return: the new zoom factor
+        :rtype: float
+        """
+        return self.__zoom(ZoomState.RESET)
+
+    def __zoom(self, state: ZoomState) -> float:
         # Update the display with the new scale factor
         self.scroll_area.snapshot()
-        self.label.update_image_display(delta)
+
+        new_zoom_factor = self.label.zoom_image(state)
 
         image_size = self.label.pixmap().size()
         scroll_area_viewport = self.scroll_area.viewport()
@@ -145,6 +186,8 @@ class ImageViewer(QWidget):
         self.scroll_area.update()
         self.scroll_area.restore()
 
+        return new_zoom_factor
+
     def __scroll(self, delta: int):
         self.scroll_area.scroll_v(delta)
 
@@ -158,6 +201,9 @@ class ImageLabel(QLabel):
         self.setMouseTracking(True)
         self.__original_pixmap = None
         self.__parent = parent
+        self.__max_zoom = 5  # 500%
+        self.__min_zoom = 0.1  # 10%
+        self.__zoom_delta = 0.1  # 10%
 
     def get_image(self) -> QImage | None:
         """
@@ -237,9 +283,31 @@ class ImageLabel(QLabel):
         :return: None
         """
         self.__original_pixmap = a0
-        self.update_image_display(None)
+        self.update_image_display()
 
-    def update_image_display(self, delta: int | None) -> None:
+    def zoom_image(self, state: ZoomState) -> float:
+        """
+        Zoom the image.
+        :param state: the zoom state
+        :type state: ZoomState
+        :return: the new zoom factor
+        :rtype: float
+        """
+        if state == ZoomState.IN:
+            self.__zoom_factor = min(
+                self.__max_zoom, self.__zoom_factor + self.__zoom_delta
+            )
+        elif state == ZoomState.OUT:
+            self.__zoom_factor = max(
+                self.__min_zoom, self.__zoom_factor - self.__zoom_delta
+            )
+        elif state == ZoomState.RESET:
+            self.__zoom_factor = 1.0
+
+        self.update_image_display()
+        return self.__zoom_factor
+
+    def update_image_display(self) -> None:
         """
         Update the image display based on the zoom factor and the scroll direction.
         :param delta: the scroll direction
@@ -251,12 +319,6 @@ class ImageLabel(QLabel):
 
         scroll_area = self.__parent
         available_size = scroll_area.size()
-
-        # Zoom in or out based on the scroll direction
-        if delta is not None and delta > 0:  # Scroll up
-            self.__zoom_factor = min(5, self.__zoom_factor + 0.1)  # Max 500%
-        elif delta is not None:  # Scroll down
-            self.__zoom_factor = max(0.1, self.__zoom_factor - 0.1)  # Min 10%
 
         scaled_pixmap = self.__original_pixmap.scaled(
             available_size,

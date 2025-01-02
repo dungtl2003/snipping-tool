@@ -20,6 +20,9 @@ class SaveButton(QPushButton):
         self.__on_save_event = on_save_event
 
     def __save(self):
+        if not self.isEnabled():
+            return
+
         self.__animate_button()
         self.__on_save_event()
 

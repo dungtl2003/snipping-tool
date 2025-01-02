@@ -37,9 +37,20 @@ class ColorPicker(QPushButton):
         Toggle the color picker.
         :return: None
         """
-        self.__is_active = not self.__is_active
-        self.setChecked(self.__is_active)
+        if self.__is_active:
+            self.deactivate()
+        else:
+            self.activate()
+
+    def activate(self) -> None:
+        """
+        Activate the color picker.
+        :return: None
+        """
+        self.__is_active = True
+        self.setChecked(True)
         self.color_square.hide()
+        set_cross_cursor(20, Qt.GlobalColor.gray)
 
     def deactivate(self) -> None:
         """
@@ -87,7 +98,7 @@ class ColorPicker(QPushButton):
         mouse_glob_pos = a0.globalPosition()
 
         need_render = False
-        if not self.__viewer.is_in_bound(mouse_glob_pos):
+        if not self.__viewer.is_in_pixmap_bound(mouse_glob_pos):
             if self.__is_last_in_bound is not False:
                 self.__is_last_in_bound = False
                 set_normal_cursor()

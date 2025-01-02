@@ -35,13 +35,14 @@ class ClipboardItem(QWidget):
         self.created_at = created_at
 
 
-class AnimatedLabel(QLabel):
+class ItemLabel(QLabel):
     def __init__(
         self,
         item: ClipboardItem,
         w: int,
         h: int,
         on_selected: Callable[[ClipboardItem], None],
+        on_delete: Callable[["ItemLabel"], None],
     ) -> None:
         super().__init__()
         self.setFixedSize(w, h)
@@ -59,51 +60,27 @@ class AnimatedLabel(QLabel):
         )
         self.hover_animation = QPropertyAnimation(self, b"geometry")
         self.hover_animation.setDuration(200)
-        self.__original_y = None
-        self.__original_geometry = None
         self.__on_selected = on_selected
-        self.__item = item
-
-    def unlock_animation(self):
-        # x coordinate can be changed depending on the list
-        self.__original_y = self.y()
-
-    def lock_animation(self):
-        self.__original_y = None
+        self.__on_delete = on_delete
+        self.item = item
 
     def mousePressEvent(self, ev: Optional[QMouseEvent]) -> None:
         assert ev is not None
         if ev.button() == Qt.MouseButton.LeftButton:
-            self.__on_selected(self.__item)
+            self.__on_selected(self.item)
+        elif ev.button() == Qt.MouseButton.RightButton:
+            if self.item is not None:
+                self.__on_delete(self)
 
     def enterEvent(self, event: Optional[QEnterEvent]) -> None:
-        # Animate to move up when hovered
-        if self.__original_y is None:
-            return
-
-        self.__original_x = self.x()
-        self.__original_geometry = QRect(
-            self.__original_x, self.__original_y, self.width(), self.height()
-        )
-        rect = QRect(self.__original_x, self.__original_y, self.width(), self.height())
-        rect.moveTop(rect.top() - 10)  # Move up by 10 pixels
-        self.hover_animation.setStartValue(self.geometry())
-        self.hover_animation.setEndValue(rect)
-        self.hover_animation.start()
         self.update_border_color("#A9CDFF")
         super().enterEvent(event)
+        return
 
     def leaveEvent(self, a0: Optional[QEvent]) -> None:
-        # Animate back to original position when not hovered
-        if self.__original_y is None or self.__original_geometry is None:
-            return
-
-        self.hover_animation.setStartValue(self.geometry())
-        self.hover_animation.setEndValue(self.__original_geometry)
-        self.hover_animation.start()
-
         self.update_border_color("#888")  # Default border
         super().leaveEvent(a0)
+        return
 
     def update_border_color(self, color: str):
         # Update the label's style sheet dynamically
@@ -132,7 +109,6 @@ class ClipboardManager(QWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
         self.setWindowFlags(Qt.WindowType.Tool)
-        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # Main Layout
         main_layout = QVBoxLayout(self)
@@ -206,7 +182,6 @@ class ClipboardManager(QWidget):
             )
             os.remove(item.file_path)
 
-        total_width = 20  # Padding
         for i in range(self.content_layout.count()):
             item = self.content_layout.itemAt(i)
             if item is not None:
@@ -215,9 +190,14 @@ class ClipboardManager(QWidget):
                     item.deleteLater()
 
         for item in self.__items:
-            total_width += self.__lw + 10
             self.content_layout.addWidget(
-                AnimatedLabel(item, self.__lw, self.__lh, self.__on_label_selected)
+                ItemLabel(
+                    item,
+                    self.__lw,
+                    self.__lh,
+                    self.__on_label_selected,
+                    self.__on_label_deleted,
+                )
             )
 
         if len(self.__items) == 0:
@@ -225,6 +205,7 @@ class ClipboardManager(QWidget):
             return
 
         max_width = self.__calculate_max_width()
+        total_width = self.__calculate_total_width()
         self.setFixedWidth(min(total_width, max_width))
 
     @pyqtSlot()
@@ -244,19 +225,10 @@ class ClipboardManager(QWidget):
 
         self.__lock_animation()
         self.__is_active = True
-        screen_geometry = utils.get_focus_screen_geometry()
-        screen_width = screen_geometry.width()
-        screen_height = screen_geometry.height()
 
         self.show()
 
-        self.start_x = (
-            screen_geometry.x() + (screen_width - self.width()) // 2
-        )  # Center horizontally
-        self.start_y = (
-            screen_height - self.height()
-        )  # Start at the bottom of the screen
-        self.end_y = screen_height - self.height() - 30  # Final position
+        self.start_x, self.start_y, self.end_y = self.__calculate_position()
 
         # Animation for showing
         self.animation = QPropertyAnimation(self, b"geometry")
@@ -271,10 +243,31 @@ class ClipboardManager(QWidget):
         self.animation.start()
         self.animation.finished.connect(lambda: self.__unlock_animation())
 
+    def __calculate_position(self) -> tuple[int, int, int]:
+        """
+        Calculate the position of the clipboard manager window.
+
+        :return: The x, y, and end y position
+        :rtype: tuple[int, int, int]
+        """
+        screen_geometry = utils.get_focus_screen_geometry()
+        screen_width = screen_geometry.width()
+        screen_height = screen_geometry.height()
+        return (
+            screen_geometry.x() + (screen_width - self.width()) // 2,
+            screen_height - self.height(),
+            screen_height - self.height() - 30,
+        )
+
     def __calculate_max_width(self):
         screen_geometry = utils.get_focus_screen_geometry()
         screen_width = screen_geometry.width()
         return screen_width * 2 // 3
+
+    def __calculate_total_width(self):
+        return (
+            sum([self.__lw + 10 for _ in range(len(self.__items))]) + 20
+        )  # 20 for padding
 
     def __hide_with_animation(self):
         if self.__is_animating:
@@ -297,32 +290,55 @@ class ClipboardManager(QWidget):
 
     def __lock_animation(self):
         self.__is_animating = True
-        for i in range(self.content_layout.count()):
-            widget = self.content_layout.itemAt(i)
-            if widget is not None:
-                widget = widget.widget()
-                if isinstance(widget, AnimatedLabel):
-                    widget.lock_animation()
 
     def __unlock_animation(self):
         self.__is_animating = False
-        for i in range(self.content_layout.count()):
-            widget = self.content_layout.itemAt(i)
-            assert widget is not None
-            widget = widget.widget()
-            if widget is not None and isinstance(widget, AnimatedLabel):
-                widget.unlock_animation()
 
     def __on_label_selected(self, item: ClipboardItem):
         if self.__is_animating:
             return
 
+        self.__save_to_sys_clipboard(item)
+        self.__hide_with_animation()
+
+    def __on_label_deleted(self, label: ItemLabel):
+        if self.__is_animating:
+            return
+
+        self.__lock_animation()
+        item = label.item
+        self.__save_to_sys_clipboard(item)
+
+        self.content_layout.removeWidget(label)
+        self.__items.remove(item)
+        label.setParent(None)
+        label.deleteLater()
+
+        self.content_layout.update()
+        self.content_layout.activate()
+
+        os.remove(label.item.file_path)
+
+        if len(self.__items) == 0:
+            self.__load_no_items_label()
+        else:
+            total_width = self.__calculate_total_width()
+            max_width = self.__calculate_max_width()
+            self.setFixedWidth(min(total_width, max_width))
+
+        self.start_x, _, self.end_y = self.__calculate_position()
+        self.setGeometry(self.start_x, self.end_y, self.width(), self.height())
+
+        self.update()
+
+        self.__unlock_animation()
+
+    def __save_to_sys_clipboard(self, item: ClipboardItem):
         clipboard = QApplication.clipboard()
         if clipboard is None:
             return
 
         clipboard.setPixmap(item.image)
-        self.__hide_with_animation()
 
 
 def run_clipboard_manager():

@@ -4,6 +4,10 @@ import platform
 import sys
 import tempfile
 
+env = os.environ.get("ENV")
+if env == "dev":
+    print("Running in development mode")
+
 
 # remember to update the path when adding new modules
 def resolve_path():
@@ -120,12 +124,26 @@ def resolve_app_data_path():
         raise Exception(f"Unsupported OS: {os_name}")
 
 
+def resolve_cred_path(app_data_path: str, app_name: str, root_dir: str):
+    if env == "dev":
+        return (
+            os.path.join(root_dir, "credentials.json"),
+            os.path.join(root_dir, "token.json"),
+        )
+    else:
+        return (
+            os.path.join(app_data_path, app_name, "credentials.json"),
+            os.path.join(app_data_path, app_name, "token.json"),
+        )
+
+
 resolve_path()
 
-APP_NAME = "becap"
+APP_NAME = "Becap"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(ROOT_DIR, "assets")
 ICON_DIR = os.path.join(ASSETS_DIR, "icons")
+ANIMATION_DIR = os.path.join(ASSETS_DIR, "animations")
 
 # Create a temporary folder for 'becap'
 TEMP_DIR = os.path.join(tempfile.gettempdir(), APP_NAME)
@@ -137,6 +155,7 @@ SYSTEM_PICTURE_PATH = resolve_system_picture_path()
 SYSTEM_VIDEO_PATH = resolve_system_video_path()
 APP_DATA_PATH = resolve_app_data_path()
 
+CRED_PATH, TOKEN_PATH = resolve_cred_path(APP_DATA_PATH, APP_NAME, ROOT_DIR)
 BECAP_PICTURE_PATH = os.path.join(SYSTEM_PICTURE_PATH, APP_NAME)
 BECAP_VIDEO_PATH = os.path.join(SYSTEM_VIDEO_PATH, APP_NAME)
 BECAP_CLIPBOARD_MANAGER_PATH = os.path.join(

@@ -1,18 +1,15 @@
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QToolBar, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QSizePolicy, QToolBar, QWidget
 
 from components.blur import Blur
+from components.painter import Painter
+from components.upload import UploadButton
+from components.zoom import Zoom
 from utils.styles import qtoolbar_style
 from components.mode_switching import ModeSwitching
 from components.capture import NewCapture
 from components.color_picker import ColorPicker
 from components.save import SaveButton
 from components.copy_btn import CopyButton
-
-import os
-from preload import ICON_DIR
-
-MORE_ICON = os.path.join(ICON_DIR, "more.svg")
 
 
 class BaseToolBar(QToolBar):
@@ -25,9 +22,7 @@ class BaseToolBar(QToolBar):
 
 class MiddleToolBar(BaseToolBar):
     def __init__(
-        self,
-        eye_dropper: ColorPicker,
-        blur_btn: Blur,
+        self, eye_dropper: ColorPicker, blur_btn: Blur, zoom: Zoom, painter: Painter
     ) -> None:
         super().__init__()
 
@@ -48,7 +43,9 @@ class MiddleToolBar(BaseToolBar):
         layout.addWidget(left_spacer)
         layout.addWidget(eye_dropper)
         layout.addWidget(blur_btn)
+        layout.addWidget(painter)
         layout.addWidget(right_spacer)
+        layout.addWidget(zoom)
 
         widget = QWidget()
         widget.setLayout(layout)
@@ -56,9 +53,20 @@ class MiddleToolBar(BaseToolBar):
 
         self.__eye_dropper = eye_dropper
         self.__blur_btn = blur_btn
+        self.__painter = painter
 
         self.__eye_dropper.toggled.connect(self.__on_eye_dropper_toggled)
         self.__blur_btn.toggled.connect(self.__on_blur_toggled)
+        self.__painter.toggled.connect(self.__on_paint_toggled)
+
+    def __on_paint_toggled(self) -> None:
+        """
+        Handle the paint toggled.
+        :return: None
+        """
+        if self.__painter.isChecked():
+            self.__eye_dropper.deactivate()
+            self.__blur_btn.deactivate()
 
     def __on_eye_dropper_toggled(self) -> None:
         """
@@ -67,6 +75,7 @@ class MiddleToolBar(BaseToolBar):
         """
         if self.__eye_dropper.isChecked():
             self.__blur_btn.deactivate()
+            self.__painter.deactivate()
 
     def __on_blur_toggled(self) -> None:
         """
@@ -75,10 +84,10 @@ class MiddleToolBar(BaseToolBar):
         """
         if self.__blur_btn.isChecked():
             self.__eye_dropper.deactivate()
+            self.__painter.deactivate()
 
 
 class TopToolBar(BaseToolBar):
-    # new     | mode |       eye dropper
     def __init__(
         self,
         new_capture: NewCapture,
@@ -86,6 +95,7 @@ class TopToolBar(BaseToolBar):
         middle_toolbar: MiddleToolBar,
         save: SaveButton,
         copy: CopyButton,
+        upload: UploadButton,
     ) -> None:
         super().__init__()
 
@@ -94,6 +104,7 @@ class TopToolBar(BaseToolBar):
         self.__middle_toolbar = middle_toolbar
         self.__save_btn = save
         self.__copy_btn = copy
+        self.__upload_btn = upload
 
         self.__spacer = QWidget()
         self.__spacer.setSizePolicy(
@@ -160,11 +171,16 @@ class TopToolBar(BaseToolBar):
         """
         self.__left_toolbar.hide()
 
-    # save copy | more
+    #  save copy | upload
     def __add_right_section(self):
         self.__right_toolbar = QToolBar()
         self.__right_toolbar.setMovable(False)
         self.__right_toolbar.setStyleSheet("QToolBar { padding: 0px; }")
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(30, 30)
+        self.__right_toolbar.addWidget(space)
 
         # Save
         self.__right_toolbar.addWidget(self.__save_btn)
@@ -182,7 +198,7 @@ class TopToolBar(BaseToolBar):
         space.setFixedSize(10, 10)
         self.__right_toolbar.addWidget(space)
 
-        # |
+        # Separator
         self.__right_toolbar.addSeparator()
 
         # Space
@@ -190,9 +206,8 @@ class TopToolBar(BaseToolBar):
         space.setFixedSize(10, 10)
         self.__right_toolbar.addWidget(space)
 
-        # More
-        more_button = QPushButton(QIcon(MORE_ICON), "")
-        self.__right_toolbar.addWidget(more_button)
+        # Upload
+        self.__right_toolbar.addWidget(self.__upload_btn)
 
         right_layout = QHBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -235,6 +250,11 @@ class TopToolBar(BaseToolBar):
         left_widget = QWidget()
         left_widget.setLayout(left_layout)
         self.addWidget(left_widget)
+
+        # Space
+        space = QWidget()
+        space.setFixedSize(30, 30)
+        self.__left_toolbar.addWidget(space)
 
 
 class BottomToolBar(BaseToolBar):
