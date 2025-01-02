@@ -1,7 +1,7 @@
 import io
 import time
 from enum import Enum
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Dict
 from PyQt6.QtCore import QBuffer, QByteArray, QThread, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QImage
 from PyQt6.QtWidgets import (
@@ -13,15 +13,15 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ffmpeg.nodes import os
-from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.discovery import build
 
 from components.message_dialog import CustomInformationDialog, CustomCriticalDialog
 from components.loading_dialog import LoadingDialog
-from preload import ICON_DIR, TOKEN_PATH, CRED_PATH
+from preload import ICON_DIR, TOKEN_PATH
 
 UPLOAD_ICON = os.path.join(ICON_DIR, "upload.svg")
 DRIVE_ICON = os.path.join(ICON_DIR, "drive.svg")
@@ -293,48 +293,80 @@ class AuthenticationHandler(QThread):
     auth_completed = pyqtSignal(Credentials)
     auth_error = pyqtSignal(Message)
     
-    def __init__(self, scopes: List[str], cred_path: str, token_path: str):
+    def __init__(self, scopes: List[str], token_path: str):
         super().__init__()
         self.scopes = scopes
-        self.cred_path = cred_path
         self.token_path = token_path
         self.timeout = 300  # 5 minutes timeout
+        
+         # Desktop app client configuration 
+        self.client_config = {
+            "installed": {
+                "client_id": "260824934414-evidd1af95f46hid2h6voba4508grsgq.apps.googleusercontent.com",
+                "project_id": "becap-445610",
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_secret": "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",
+                "redirect_uris": ["http://localhost"]
+            }
+        }
 
     def run(self):
         try:
             credentials = None
+            # Check for existing valid token
             if os.path.exists(self.token_path):
-                with open(self.token_path, "r") as token:
-                    credentials = Credentials.from_authorized_user_file(
-                        self.token_path, self.scopes
-                    )
+                try:
+                    with open(self.token_path, "r") as token:
+                        credentials = Credentials.from_authorized_user_file(
+                            self.token_path, self.scopes
+                        )
+                except Exception:
+                    # If token file is corrupted, remove it
+                    os.remove(self.token_path)
+                    credentials = None
 
             if not credentials or not credentials.valid:
                 if credentials and credentials.expired and credentials.refresh_token:
-                    credentials.refresh(Request())
-                else:
-                    if not os.path.exists(self.cred_path):
-                        self.auth_error.emit(Message(
-                            "Configuration Error",
-                            f"Missing {self.cred_path}. Please obtain it from Google Cloud Console."
-                        ))
-                        return
-
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        self.cred_path, self.scopes
+                    try:
+                        credentials.refresh(Request())
+                    except Exception:
+                        # If refresh fails, force new authentication
+                        credentials = None
+                
+                if not credentials:
+                    flow = InstalledAppFlow.from_client_config(
+                        self.client_config,
+                        self.scopes
                     )
                     
                     # Run with timeout
                     import threading
                     auth_event = threading.Event()
-                    auth_result = {"credentials": None, "error": None}
+                    auth_result: Dict = {"credentials": None, "error": None}
 
                     def auth_thread():
                         try:
-                            auth_result["credentials"] = flow.run_local_server(port=0)
+                            # Use run_local_server for desktop apps
+                            auth_result["credentials"] = flow.run_local_server(
+                                port=0,  # Let the OS pick an available port
+                                authorization_prompt_message="Please complete authentication in your browser.",
+                                success_message="Authentication completed! You can close this window."
+                            )
                             auth_event.set()
                         except Exception as e:
-                            auth_result["error"] = str(e)
+                            error_message = str(e)
+                            if "Failed to launch browser" in error_message:
+                                auth_result["error"] = "Could not open browser for authentication. Please check your browser settings."
+                            elif "invalid_grant" in error_message:
+                                auth_result["error"] = "Authentication was cancelled or denied. Please try again."
+                            elif "access_denied" in error_message:
+                                auth_result["error"] = "You denied access to your Google Drive. Please allow access to continue."
+                            elif "Authorization failed" in error_message:
+                                auth_result["error"] = "Authorization was cancelled. Please complete the authentication process."
+                            else:
+                                auth_result["error"] = f"Authentication failed"
                             auth_event.set()
 
                     thread = threading.Thread(target=auth_thread)
@@ -351,26 +383,26 @@ class AuthenticationHandler(QThread):
 
                     if auth_result["error"]:
                         self.auth_error.emit(Message(
-                            "Authentication Error",
-                            f"Failed to authenticate: {auth_result['error']}"
+                            "Authentication Error"
                         ))
                         return
 
                     credentials = auth_result["credentials"]
 
-                with open(self.token_path, "w") as token:
-                    token.write(credentials.to_json())
+                # Save valid credentials
+                if credentials and credentials.valid:
+                    with open(self.token_path, "w") as token:
+                        token.write(credentials.to_json())
 
             self.auth_completed.emit(credentials)
             
         except Exception as e:
             self.auth_error.emit(Message(
-                "Authentication Error",
-                f"Failed to authenticate: {str(e)}"
+                "Authentication Error"
             ))
 
 class DriveUploader:
-    SCOPES: List[str] = ["https://www.googleapis.com/auth/drive"]
+    SCOPES: List[str] = ["https://www.googleapis.com/auth/drive.file"]
 
     def __init__(self):
         self.__upload_worker: Optional[UploadWorker] = None
@@ -405,7 +437,7 @@ class DriveUploader:
         self.__start_authentication()
 
     def __start_authentication(self):
-        self.__auth_handler = AuthenticationHandler(self.SCOPES, CRED_PATH, TOKEN_PATH)
+        self.__auth_handler = AuthenticationHandler(self.SCOPES, TOKEN_PATH)
         self.__auth_handler.auth_completed.connect(self.__on_auth_completed)
         self.__auth_handler.auth_error.connect(self.__on_auth_error)
         self.__auth_handler.start()
