@@ -26,6 +26,10 @@ A simple snipping tool for Linux and Windows.
 
 ### Installation
 
+#### Linux
+
+Warning: Currently, this app only supports on Xorg display server. The Wayland display server is not supported yet.
+
 Pre-requisite:
 - You need to have `ffmpeg` installed on your machine to record video. You can download it [here](https://ffmpeg.org/download.html).
 - You need to have `xdotool` installed on your machine to simulate keyboard and mouse input.
@@ -36,10 +40,6 @@ Clone this repo:
 ``` bash
 git clone git@github.com:dungtl2003/snipping-tool.git
 ```
-
-#### Linux
-
-Warning: Currently, this app only supports on Xorg display server. The Wayland display server is not supported yet.
 
 Run the following command in the terminal:
 

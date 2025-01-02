@@ -280,61 +280,69 @@ class DriveFolderPicker(QDialog):
                     QTreeWidgetItem(item)
 
         except Exception as e:
-            CustomCriticalDialog(
-                "Error", f"Failed to load folders: {str(e)}", self
-            ).exec()
+            print("Error: ", str(e))
+            CustomCriticalDialog("Error", "Failed to load folders", self).exec()
 
     def __folder_selected(self, item: QTreeWidgetItem, column: int):
         folder_data = item.data(0, Qt.ItemDataRole.UserRole)
         self.selected_folder_id = folder_data["id"]
         self.selected_path = folder_data["path"]
 
+
 class AuthenticationHandler(QThread):
+    class AuthResult:
+        def __init__(self):
+            self.credentials: Credentials | None = None
+            self.error: Optional[str] = None
+
     auth_completed = pyqtSignal(Credentials)
     auth_error = pyqtSignal(Message)
-    
-    def __init__(self, scopes: List[str], cred_path: str, token_path: str):
+
+    def __init__(self, scopes: List[str]):
         super().__init__()
         self.scopes = scopes
-        self.cred_path = cred_path
-        self.token_path = token_path
-        self.timeout = 300  # 5 minutes timeout
+        self.timeout = 60 * 5  # in seconds
 
     def run(self):
         try:
             credentials = None
-            if os.path.exists(self.token_path):
-                with open(self.token_path, "r") as token:
+            if os.path.exists(TOKEN_PATH):
+                with open(TOKEN_PATH, "r") as token:
                     credentials = Credentials.from_authorized_user_file(
-                        self.token_path, self.scopes
+                        TOKEN_PATH, self.scopes
                     )
 
             if not credentials or not credentials.valid:
                 if credentials and credentials.expired and credentials.refresh_token:
                     credentials.refresh(Request())
                 else:
-                    if not os.path.exists(self.cred_path):
-                        self.auth_error.emit(Message(
-                            "Configuration Error",
-                            f"Missing {self.cred_path}. Please obtain it from Google Cloud Console."
-                        ))
+                    if not os.path.exists(CRED_PATH):
+                        self.auth_error.emit(
+                            Message(
+                                "Configuration Error",
+                                f"Missing {CRED_PATH}. Please obtain it from Google Cloud Console.",
+                            )
+                        )
                         return
 
                     flow = InstalledAppFlow.from_client_secrets_file(
-                        self.cred_path, self.scopes
+                        CRED_PATH, self.scopes
                     )
-                    
+
                     # Run with timeout
                     import threading
+
                     auth_event = threading.Event()
-                    auth_result = {"credentials": None, "error": None}
+                    auth_result = AuthenticationHandler.AuthResult()
 
                     def auth_thread():
                         try:
-                            auth_result["credentials"] = flow.run_local_server(port=0)
+                            cred = flow.run_local_server(port=0)
+                            assert isinstance(cred, Credentials)
+                            auth_result.credentials = cred
                             auth_event.set()
                         except Exception as e:
-                            auth_result["error"] = str(e)
+                            auth_result.error = str(e)
                             auth_event.set()
 
                     thread = threading.Thread(target=auth_thread)
@@ -343,34 +351,57 @@ class AuthenticationHandler(QThread):
 
                     # Wait with timeout
                     if not auth_event.wait(timeout=self.timeout):
-                        self.auth_error.emit(Message(
-                            "Authentication Error",
-                            "Authentication timed out. Please try again."
-                        ))
+                        print("Authentication timed out")
                         return
 
-                    if auth_result["error"]:
-                        self.auth_error.emit(Message(
-                            "Authentication Error",
-                            f"Failed to authenticate: {auth_result['error']}"
-                        ))
+                    if auth_result.error:
+                        print(f"Error: {auth_result.error}")
+                        self.auth_error.emit(
+                            Message(
+                                "Authentication Error",
+                                "Failed to authenticate user.",
+                            )
+                        )
                         return
 
-                    credentials = auth_result["credentials"]
+                    assert auth_result.credentials is not None
+                    credentials = auth_result.credentials
 
-                with open(self.token_path, "w") as token:
+                with open(TOKEN_PATH, "w") as token:
                     token.write(credentials.to_json())
 
             self.auth_completed.emit(credentials)
-            
+
         except Exception as e:
-            self.auth_error.emit(Message(
-                "Authentication Error",
-                f"Failed to authenticate: {str(e)}"
-            ))
+            print("Error: ", str(e))
+            self.auth_error.emit(
+                Message("Authentication Error", "Failed to authenticate user.")
+            )
+
 
 class DriveUploader:
     SCOPES: List[str] = ["https://www.googleapis.com/auth/drive"]
+
+    class PendingUpload:
+        def __init__(
+            self,
+            data: bytes,
+            filename: str,
+            mime_type: str,
+            on_cancel_upload: Callable[[], None],
+            on_uploading: Callable[[], None],
+            on_upload_complete: Callable[[Message], None],
+            on_upload_error: Callable[[Message], None],
+            parent: Optional[QWidget] = None,
+        ):
+            self.data = data
+            self.filename = filename
+            self.mime_type = mime_type
+            self.on_cancel_upload = on_cancel_upload
+            self.on_uploading = on_uploading
+            self.on_upload_complete = on_upload_complete
+            self.on_upload_error = on_upload_error
+            self.parent = parent
 
     def __init__(self):
         self.__upload_worker: Optional[UploadWorker] = None
@@ -390,90 +421,79 @@ class DriveUploader:
         parent: Optional[QWidget] = None,
     ) -> None:
         # Store upload parameters for later use after authentication
-        self.__pending_upload = {
-            'data': data,
-            'filename': filename,
-            'mime_type': mime_type,
-            'on_cancel_upload': on_cancel_upload,
-            'on_uploading': on_uploading,
-            'on_upload_complete': on_upload_complete,
-            'on_upload_error': on_upload_error,
-            'parent': parent
-        }
-        
+        self.__pending_upload = self.PendingUpload(
+            data,
+            filename,
+            mime_type,
+            on_cancel_upload,
+            on_uploading,
+            on_upload_complete,
+            on_upload_error,
+            parent,
+        )
+
         # Start authentication process
         self.__start_authentication()
 
     def __start_authentication(self):
-        self.__auth_handler = AuthenticationHandler(self.SCOPES, CRED_PATH, TOKEN_PATH)
+        self.__auth_handler = AuthenticationHandler(self.SCOPES)
         self.__auth_handler.auth_completed.connect(self.__on_auth_completed)
         self.__auth_handler.auth_error.connect(self.__on_auth_error)
         self.__auth_handler.start()
-        
+
     def __on_auth_completed(self, credentials: Credentials):
-        if not self.__pending_upload:
-            return
+        assert self.__pending_upload is not None
 
         try:
             service = build("drive", "v3", credentials=credentials)
-            
-            folder_picker = DriveFolderPicker(
-                service, 
-                self.__pending_upload['parent']
-            )
-            
+
+            folder_picker = DriveFolderPicker(service, self.__pending_upload.parent)
+
             if folder_picker.exec() != QDialog.DialogCode.Accepted:
-                self.__pending_upload['on_cancel_upload']()
+                self.__pending_upload.on_cancel_upload()
                 return
 
             self.__start_upload(
                 service,
-                self.__pending_upload['data'],
-                self.__pending_upload['filename'],
-                self.__pending_upload['mime_type'],
                 folder_picker.selected_folder_id,
-                self.__pending_upload['on_uploading'],
-                self.__pending_upload['on_upload_complete'],
-                self.__pending_upload['on_upload_error'],
             )
         except Exception as e:
-            if self.__pending_upload['on_upload_error']:
-                self.__pending_upload['on_upload_error'](
-                    Message("Error", f"Failed to initialize upload: {str(e)}")
-                )
+            print("Error: ", str(e))
+            self.__pending_upload.on_upload_error(
+                Message("Error", "Failed to initialize upload")
+            )
         finally:
             # Clear pending upload data
             self.__pending_upload = None
 
     def __on_auth_error(self, error: Message):
-        if self.__pending_upload and self.__pending_upload['on_upload_error']:
-            self.__pending_upload['on_upload_error'](error)
+        assert self.__pending_upload is not None
+
+        self.__pending_upload.on_upload_error(error)
         self.__pending_upload = None
 
     def __start_upload(
         self,
         service,
-        data: bytes,
-        filename: str,
-        mime_type: str,
         folder_id: str,
-        on_uploading: Callable[[], None],
-        on_upload_complete: Callable[[Message], None],
-        on_upload_error: Callable[[Message], None],
     ) -> None:
+        assert self.__pending_upload is not None
+
         self.__upload_worker = UploadWorker(
             service,
-            data,
-            filename,
+            self.__pending_upload.data,
+            self.__pending_upload.filename,
             folder_id,
-            mime_type,
+            self.__pending_upload.mime_type,
         )
 
-        self.__upload_worker.upload_completed.connect(on_upload_complete)
-        self.__upload_worker.upload_error.connect(on_upload_error)
+        self.__upload_worker.upload_completed.connect(
+            self.__pending_upload.on_upload_complete
+        )
+        self.__upload_worker.upload_error.connect(self.__pending_upload.on_upload_error)
 
         self.__upload_worker.start()
-        on_uploading()
+        self.__pending_upload.on_uploading()
 
 
 class UploadWorker(QThread):
@@ -553,9 +573,10 @@ class UploadWorker(QThread):
     def run(self) -> None:
         try:
             file_id, file_path = self.__upload_data()
+            print(f"Uploaded file: {file_path}, ID: {file_id}")
             message = Message(
                 "Success",
-                f"{self.__filename} uploaded successfully!\nLocation: {file_path}",
+                "Uploaded successfully!",
             )
             self.upload_completed.emit(message)
         except Exception as e:
