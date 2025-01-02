@@ -65,4 +65,5 @@ uninstall_linux:
 
 run_dev: 
 	$(ROOT_DIR)/scripts/create_env.sh
+	$(ROOT_DIR)/scripts/create_creds.sh
 	. $(PYTHON) && ENV=dev python main.py
