@@ -1,4 +1,15 @@
+opencv-python==4.10.0.84
+numpy==1.24.3
 pillow==11.0.0
-PyQt6==6.7.1
-PyQt6-Qt6==6.7.3
+PyQt6==6.8.0
+PyQt6-Qt6==6.8.1
 PyQt6_sip==13.8.0
+pyaudio==0.2.14
+mss==10.0.0
+ffmpeg-python==0.2.0
+pynput==1.7.7
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-api-python-client==2.100.0
+httplib2==0.22.0
+pyinstaller
