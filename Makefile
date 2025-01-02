@@ -8,17 +8,18 @@ VENV_CHECK = $(shell if [ ! -d "$(ENV_DIR)" ]; then echo "not_exists"; fi)
 # Target to generate the script
 gen_script_linux:
 	@echo "Generating script"
+	$(ROOT_DIR)/scripts/create_creds.sh
 	$(ROOT_DIR)/scripts/create_env.sh
 	. $(PYTHON) && pip install -r requirements.txt && pyinstaller --onefile --add-data "assets/icons:assets/icons" --add-data "assets/animations:assets/animations" --name Becap --windowed main.py
 
 clean_linux: uninstall_linux
-	echo "Cleaning up"
+	@echo "Cleaning up"
 	rm -rf dist
 	rm -rf build
 	rm -rf __pycache__
 
 build_app_linux:
-	echo "Creating nessessary directories"
+	@echo "Creating nessessary directories"
 	mkdir -p $(HOME)/.local/share/icons/hicolor/256x256/apps
 	mkdir -p $(HOME)/.local/share/icons/hicolor/128x128/apps
 	mkdir -p $(HOME)/.local/share/icons/hicolor/64x64/apps
@@ -27,7 +28,7 @@ build_app_linux:
 	mkdir -p $(HOME)/.local/share/applications
 	mkdir -p $(HOME)/.local/share/Becap
 
-	echo "Copying icons and desktop file"
+	@echo "Copying icons and desktop file"
 	cp assets/256x256/scissor.png $(HOME)/.local/share/icons/hicolor/256x256/apps/Becap.png
 	cp assets/128x128/scissor.png $(HOME)/.local/share/icons/hicolor/128x128/apps/Becap.png
 	cp assets/64x64/scissor.png $(HOME)/.local/share/icons/hicolor/64x64/apps/Becap.png
@@ -36,20 +37,20 @@ build_app_linux:
 	cp Becap.desktop $(HOME)/.local/share/applications/Becap.desktop
 	cp dist/Becap $(HOME)/.local/bin/Becap
 
-	echo "Copying credentials"
+	@echo "Copying credentials"
 	cp credentials.json $(HOME)/.local/share/Becap/credentials.json
 
-	echo "Setting permissions"
+	@echo "Setting permissions"
 	chmod +x $(HOME)/.local/bin/Becap
 	chmod +x $(HOME)/.local/share/applications/Becap.desktop
 
-	echo "Updating desktop database"
+	@echo "Updating desktop database"
 	update-desktop-database $(HOME)/.local/share/applications
 
 install_linux: clean_linux gen_script_linux build_app_linux
 
 uninstall_linux:
-	echo "Removing files"
+	@echo "Removing files"
 	rm -f $(HOME)/.local/bin/Becap
 	rm -f $(HOME)/.local/share/icons/hicolor/256x256/apps/Becap.png
 	rm -f $(HOME)/.local/share/icons/hicolor/128x128/apps/Becap.png
@@ -59,7 +60,7 @@ uninstall_linux:
 	rm -f $(HOME)/.local/share/applications/Becap.desktop
 	rm -rf $(HOME)/.local/share/Becap
 
-	echo "Updating desktop database"
+	@echo "Updating desktop database"
 	update-desktop-database $(HOME)/.local/share/applications
 
 run_dev: 
