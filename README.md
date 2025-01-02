@@ -1,13 +1,12 @@
 # snipping-tool
 
-A simple snipping tool for Linux and Windows.
+A simple snipping tool for Linux.
 
 ## Table of contents
 
 - [Features](#features)
 - [Installation](#installation)
     - [Linux](#linux)
-    - [Windows](#windows)
 - [For developers](#for-developers)
 - [Usage](#usage)
 
@@ -52,10 +51,6 @@ Uninstall the app:
 ``` bash
 make uninstall_linux
 ```
-
-#### Windows
-
-Comming soon...
 
 ### For developers
 
