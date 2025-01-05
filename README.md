@@ -7,6 +7,7 @@ A simple snipping tool for Linux.
 - [Features](#features)
 - [Installation](#installation)
     - [Linux](#linux)
+    - [Windows](#windows)
 - [For developers](#for-developers)
 - [Usage](#usage)
 
@@ -30,9 +31,6 @@ A simple snipping tool for Linux.
 Warning: Currently, this app only supports on Xorg display server. The Wayland display server is not supported yet.
 
 Pre-requisite:
-- You need to have `ffmpeg` installed on your machine to record video. You can download it [here](https://ffmpeg.org/download.html).
-- You need to have `xdotool` installed on your machine to simulate keyboard and mouse input.
-- You need to have `xclip` installed on your machine to copy the screenshot to the clipboard.
 - You need to have python 3.10 installed on your machine. You can download it [here](https://www.python.org/downloads/).
 
 Clone this repo:
@@ -50,6 +48,22 @@ Uninstall the app:
 
 ``` bash
 make uninstall_linux
+```
+
+#### Windows
+
+Pre-requisite:
+- You need to have python 3.10 installed on your machine. You can download it [here](https://www.python.org/downloads/).
+
+Clone this repo:
+``` bash
+git clone git@github.com:dungtl2003/snipping-tool.git
+```
+
+Run the following command in the terminal:
+
+``` bash
+make install_windows
 ```
 
 ### For developers
